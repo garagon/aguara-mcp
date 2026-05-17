@@ -1,34 +1,35 @@
 # Aguara MCP
 
-**Security advisor for AI agents.**
+Local security checks for AI agents before they trust third-party tools.
 
-Aguara MCP is an [MCP server](https://modelcontextprotocol.io/) that gives AI agents the ability to scan skills, plugins, and MCP configurations for security threats before installing or running them. Built on the [official MCP SDK](https://github.com/modelcontextprotocol/go-sdk) (v1, Tier 1).
+Aguara MCP gives Claude Code, Cursor, Windsurf, and any MCP-compatible agent a local tool for reviewing untrusted agent content before acting on it.
 
-Powered by [Aguara](https://github.com/garagon/aguara), the open-source security scanner purpose-built for the AI agent ecosystem. v0.6.0 aligns the MCP with Aguara v0.17.0: 219 cataloged detections (193 YAML pattern rules + 26 analyzer-emitted), seven analyzers (pattern, ci-trust, pkgmeta, jsrisk, NLP, toxic-flow, rug-pull), sensitivity-based output redaction, context-aware false-positive reduction, Unicode evasion prevention, zero network access.
+When an agent is about to install an MCP server, inspect a skill, read a plugin README, or load a tool configuration, it can call Aguara first. The scan runs locally, inside the MCP server, and returns a structured verdict with findings, severity, remediation, and the rule that triggered.
 
-## What this MCP can do
+No LLM calls. No network access. No subprocess to the `aguara` binary. The MCP server imports Aguara as a Go library and runs the scanner in-process.
 
-Aguara MCP runs in-process: it imports the Aguara scanner as a Go library and exposes five read-only tools over MCP stdio.
+Use it to help agents answer questions like:
 
-- Scan arbitrary text for security threats (`scan_content`)
-- Check an MCP server configuration before installing it (`check_mcp_config`)
-- List and explain rules from the v0.17 catalog (`list_rules`, `explain_rule`)
-- Discover MCP server definitions on the local machine without executing them (`discover_mcp`)
+- Is this MCP config exposing credentials?
+- Does this tool description contain prompt injection?
+- Is this README asking the agent to run unsafe install commands?
+- Does this skill try to read secrets or exfiltrate data?
+- Which rule triggered, and why?
 
-## What still requires the Aguara CLI
+Aguara MCP v0.6.0 is aligned with [Aguara](https://github.com/garagon/aguara) v0.17.0. It includes the current 219-detection catalog, analyzer-emitted rules, sensitivity-based output redaction, Unicode normalization, and context-aware false-positive reduction. Built on the [official MCP SDK](https://github.com/modelcontextprotocol/go-sdk) (v1, Tier 1).
 
-Repository-wide dependency checks are intentionally **not** exposed as MCP tools in v0.6.0. The Aguara CLI walks a repo's lockfiles recursively across npm, PyPI, Go, Rust, PHP, Ruby, Java, and .NET and matches every declared package against the embedded OSV-derived threat-intel snapshot. Use the CLI for that workflow:
+Repository-wide dependency checks are still handled by the Aguara CLI:
 
 ```bash
-aguara check .          # one-shot dependency surface check
-aguara audit . --ci     # CI gate combining scan + check with a single exit code
+aguara check .
+aguara audit . --ci
 ```
 
-These will land in a future MCP release once Aguara core exposes a stable public `Check` API; see [garagon/aguara](https://github.com/garagon/aguara) for the CLI install path.
+These will land as MCP tools in a future release once Aguara core exposes a stable public `Check` API; see [garagon/aguara](https://github.com/garagon/aguara) for the CLI install path.
 
 ## The problem
 
-AI agents are gaining autonomy. They browse registries, discover tools, install MCP servers, and execute third-party code — often without any security review.
+AI agents are gaining autonomy. They browse registries, discover tools, install MCP servers, and execute third-party code - often without any security review.
 
 This creates a new attack surface. A skill published to a registry today can contain:
 
@@ -40,7 +41,7 @@ This creates a new attack surface. A skill published to a registry today can con
 
 The agent doesn't know. It can't tell a helpful tool from a weaponized one. The description looks normal. The install succeeds. The damage is done.
 
-**This is the gap Aguara MCP fills.** It gives the agent a security advisor it can consult as a tool — the same way a developer would run a linter before merging code. One tool call, milliseconds, entirely local. The agent checks first, then decides.
+**This is the gap Aguara MCP fills.** It gives the agent a security advisor it can consult as a tool - the same way a developer would run a linter before merging code. One tool call, milliseconds, entirely local. The agent checks first, then decides.
 
 ## Quick start
 
@@ -50,7 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/garagon/mcp-aguara/main/install.sh 
 
 One command, one binary, no external dependencies. The installer verifies SHA256 checksums before extracting and fails closed if no sha256 verifier is available on the host (no silent skip).
 
-> Make sure the install directory (`~/.local/bin`) is in your `PATH`. The binary is statically linked with the Aguara rule catalog and analyzers compiled in so all MCP scans run fully offline. Aguara core's OSV-derived threat-intel snapshot is **not** bundled in this binary because the MCP does not expose repository-wide dependency checks yet; use the Aguara CLI for those (see [What still requires the Aguara CLI](#what-still-requires-the-aguara-cli)).
+> Make sure the install directory (`~/.local/bin`) is in your `PATH`. The binary is statically linked with the Aguara rule catalog and analyzers compiled in so all MCP scans run fully offline. Aguara core's OSV-derived threat-intel snapshot is **not** bundled in this binary because the MCP does not expose repository-wide dependency checks yet; use the Aguara CLI for those (see [garagon/aguara](https://github.com/garagon/aguara) for install + usage).
 
 ### Add to your AI agent
 
@@ -60,7 +61,7 @@ One command, one binary, no external dependencies. The installer verifies SHA256
 claude mcp add aguara -- aguara-mcp
 ```
 
-**Claude Desktop** — add to `claude_desktop_config.json`:
+**Claude Desktop** - add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -72,7 +73,7 @@ claude mcp add aguara -- aguara-mcp
 }
 ```
 
-**Cursor / Windsurf / any MCP client** — stdio transport with `aguara-mcp`.
+**Cursor / Windsurf / any MCP client** - stdio transport with `aguara-mcp`.
 
 Your agent now has a security advisor.
 
@@ -171,13 +172,13 @@ Without Aguara MCP, the agent would have installed it silently.
 
 The v0.17 Aguara catalog totals **219 detections** (193 YAML pattern rules + 26 analyzer-emitted) across seven analyzers:
 
-- **Pattern matcher** — regex / contains rules covering prompt injection, credential leaks, exfiltration, command execution, supply-chain patterns, MCP attacks, indirect injection, external download, SSRF/cloud, third-party content, and Unicode attacks. Content is NFKC-normalized before scanning to prevent Unicode evasion.
-- **CI trust** — YAML-aware analysis of `.github/workflows/*.yml` for pwn-request chains, cache poisoning, OIDC token surface, and persisted-credentials checkout patterns. Reachable from MCP when the `filename` argument contains `.github/workflows/`.
-- **PkgMeta** — `package.json` analysis for install-time lifecycle scripts paired with git-sourced dependencies, optional-git deps, and publish-surface chains.
-- **JSRisk** — `.js`/`.mjs`/`.cjs` analysis for obfuscator-shape payloads, install-time daemonization, CI secret harvesting, runner process-memory pivots, and known IOCs (e.g. the May 2026 node-ipc DNS-TXT exfil chain).
-- **NLP** — Goldmark-based markdown analysis for prompt-injection, authority-claim, and credential-transmission combos that evade static patterns.
-- **Toxic flow** — single-file taint tracking plus cross-file correlation for dangerous capability combinations.
-- **Rug-pull** — SHA256-based change detection on tool descriptions over time (used by the Aguara CLI; not currently invoked by MCP tools).
+- **Pattern matcher** - regex / contains rules covering prompt injection, credential leaks, exfiltration, command execution, supply-chain patterns, MCP attacks, indirect injection, external download, SSRF/cloud, third-party content, and Unicode attacks. Content is NFKC-normalized before scanning to prevent Unicode evasion.
+- **CI trust** - YAML-aware analysis of `.github/workflows/*.yml` for pwn-request chains, cache poisoning, OIDC token surface, and persisted-credentials checkout patterns. Reachable from MCP when the `filename` argument contains `.github/workflows/`.
+- **PkgMeta** - `package.json` analysis for install-time lifecycle scripts paired with git-sourced dependencies, optional-git deps, and publish-surface chains.
+- **JSRisk** - `.js`/`.mjs`/`.cjs` analysis for obfuscator-shape payloads, install-time daemonization, CI secret harvesting, runner process-memory pivots, and known IOCs (e.g. the May 2026 node-ipc DNS-TXT exfil chain).
+- **NLP** - Goldmark-based markdown analysis for prompt-injection, authority-claim, and credential-transmission combos that evade static patterns.
+- **Toxic flow** - single-file taint tracking plus cross-file correlation for dangerous capability combinations.
+- **Rug-pull** - SHA256-based change detection on tool descriptions over time (used by the Aguara CLI; not currently invoked by MCP tools).
 
 See [garagon/aguara](https://github.com/garagon/aguara) for the canonical category list and rule IDs.
 
@@ -205,7 +206,7 @@ Agent                  Aguara MCP
   │                          │
 ```
 
-Aguara MCP imports the [Aguara scanner](https://github.com/garagon/aguara) as a Go library — no subprocess, no temp files, no external binary. The scan engine runs in-process with version integrity guaranteed by `go.sum`.
+Aguara MCP imports the [Aguara scanner](https://github.com/garagon/aguara) as a Go library - no subprocess, no temp files, no external binary. The scan engine runs in-process with version integrity guaranteed by `go.sum`.
 
 The MCP protocol layer uses the [official Go SDK](https://github.com/modelcontextprotocol/go-sdk) (Tier 1, Linux Foundation governance, v1 semver stability). This ensures protocol compliance and long-term compatibility as the MCP specification evolves.
 
@@ -217,13 +218,13 @@ See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 
 Aguara MCP is itself security-hardened:
 
-- **No subprocess execution** — Aguara runs as an in-process Go library, eliminating PATH hijacking and binary substitution risks
-- **No network calls** — every MCP scan is fully offline. The Aguara rule catalog and analyzers are linked in at build time; the OSV-derived threat-intel snapshot is **not** bundled in the MCP binary because the MCP does not expose repository-wide dependency checks (use the Aguara CLI for those)
-- **Input validation** — Rule IDs validated against strict format, content size capped at 10 MB
-- **Filename sanitization** — Allowlisted characters only, length-capped, no path traversal; the canonical `.github/workflows/<basename>` prefix is preserved so the v0.17 ci-trust analyzer can reach workflow YAML
-- **Sensitivity-based output redaction** — Findings marked `Sensitive=true` by Aguara core (cred+exfil combos, toxic-flow cred reads, MCP_007) or belonging to the `credential-leak` category have their `matched_text` replaced with `[REDACTED]` before the MCP serializes the response; the MCP keeps its own defensive guard in addition to Aguara's in-place scrub
-- **Signed release pipeline** — release binaries are Cosign-signed with SPDX SBOMs attached, the multi-arch Docker image at `ghcr.io/garagon/mcp-aguara` is signed at digest with SLSA provenance and SBOM attestations; verify with `VERSION=v0.6.0 .github/scripts/verify-release.sh`
-- **Version integrity** — Aguara scanner version is pinned in `go.sum`, verified at build time
+- **No subprocess execution** - Aguara runs as an in-process Go library, eliminating PATH hijacking and binary substitution risks
+- **No network calls** - every MCP scan is fully offline. The Aguara rule catalog and analyzers are linked in at build time; the OSV-derived threat-intel snapshot is **not** bundled in the MCP binary because the MCP does not expose repository-wide dependency checks (use the Aguara CLI for those)
+- **Input validation** - Rule IDs validated against strict format, content size capped at 10 MB
+- **Filename sanitization** - Allowlisted characters only, length-capped, no path traversal; the canonical `.github/workflows/<basename>` prefix is preserved so the v0.17 ci-trust analyzer can reach workflow YAML
+- **Sensitivity-based output redaction** - Findings marked `Sensitive=true` by Aguara core (cred+exfil combos, toxic-flow cred reads, MCP_007) or belonging to the `credential-leak` category have their `matched_text` replaced with `[REDACTED]` before the MCP serializes the response; the MCP keeps its own defensive guard in addition to Aguara's in-place scrub
+- **Signed release pipeline** - release binaries are Cosign-signed with SPDX SBOMs attached, the multi-arch Docker image at `ghcr.io/garagon/mcp-aguara` is signed at digest with SLSA provenance and SBOM attestations; verify with `VERSION=v0.6.0 .github/scripts/verify-release.sh`
+- **Version integrity** - Aguara scanner version is pinned in `go.sum`, verified at build time
 
 ## Advanced
 
