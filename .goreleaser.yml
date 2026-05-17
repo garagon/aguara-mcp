@@ -4,6 +4,8 @@ builds:
   - binary: aguara-mcp
     env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -16,14 +18,39 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  # GoReleaser v2.x: `format`/`format_overrides.format` (singular) is
+  # deprecated in favor of `formats`/`format_overrides.formats` (plural
+  # array). Output artifacts are identical; this only updates the
+  # config schema so `goreleaser check` stays clean for future versions.
+  - formats: [tar.gz]
     name_template: "aguara-mcp_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: "checksums.txt"
+
+# Cosign keyless signing of the checksums.txt file. Consumers verify
+# the bundle against the OIDC identity of the GitHub Actions release
+# workflow, then verify each artifact's sha256 against the now-trusted
+# checksums.txt. The .bundle format (cosign 2.x+) packs signature,
+# certificate, and TUF metadata into a single file.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.bundle"
+    args:
+      - "sign-blob"
+      - "--bundle=${signature}"
+      - "--yes"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
+
+# SPDX SBOMs generated with syft for each release archive. Lets
+# consumers audit the dependency tree without having to recompute it.
+sboms:
+  - artifacts: archive
 
 changelog:
   use: github-native

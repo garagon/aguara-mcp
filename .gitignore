@@ -1,5 +1,6 @@
 aguara-mcp
 mcp-aguara
+dist/
 .claude/
 CLAUDE.md
 .DS_Store

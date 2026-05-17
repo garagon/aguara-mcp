@@ -1,0 +1,15 @@
+# Defensive baseline for the install-sh docker test images.
+#
+# Docker does NOT honor .gitignore. Without a .dockerignore, the
+# entire repo root is sent to the Docker daemon as build context,
+# including gitignored secrets (.env, .mcpregistry_*_token, *.token),
+# the gitignored DOCS/ vault, and any local credentials. With a
+# remote Docker daemon (DOCKER_HOST=tcp://...) or a BuildKit cloud
+# builder, that context transits the network even though the
+# Dockerfiles only COPY install.sh.
+#
+# Pattern: deny everything, then re-allow the single file the
+# Dockerfiles need. Last-match-wins so * is overridden by !install.sh.
+
+*
+!install.sh
