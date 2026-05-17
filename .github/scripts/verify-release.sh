@@ -156,12 +156,34 @@ docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json
 # amd64-only image false-passing arm64 verification). Only fall back to
 # the single-arch root shape when no per-platform key exists at all.
 if grep -Eq '"(linux|darwin|windows)/[a-z0-9_]+":' "$PROVENANCE_FILE"; then
-    # Multi-arch / per-platform map. Host platform key MUST be present.
+    # Multi-arch / per-platform map. The host platform key MUST be
+    # present AND a SLSA buildType must appear inside the host slice
+    # specifically. Scoping with sed by line range is required because
+    # jq cannot parse the .Provenance JSON: buildx embeds raw git
+    # commit messages with literal U+000A / U+000D control characters
+    # that strict JSON (RFC 8259) and jq both reject. The docker buildx
+    # imagetools template always emits multi-line JSON for this field,
+    # so line-range slicing is stable for our consumer; if a future
+    # buildx release switches to single-line output, this falls back
+    # to the bare host-key check below.
     grep -q "\"${PLATFORM}\":" "$PROVENANCE_FILE" \
         || err "Docker image SLSA provenance: '.Provenance' is a per-platform map but '${PLATFORM}' is missing"
-    grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE" \
-        || err "Docker image SLSA provenance: no buildType URL in the provenance blob for ${PLATFORM}"
-    info "image provenance: SLSA present (${PLATFORM} key + buildType detected)"
+    HOST_START=$(grep -n "\"${PLATFORM}\":" "$PROVENANCE_FILE" | head -1 | cut -d: -f1)
+    # Find the line number of the NEXT per-platform key after the host
+    # platform (any os/arch). If none, fall through to end of file.
+    HOST_END=$(awk -v s="$HOST_START" '
+        NR > s && /"(linux|darwin|windows)\/[a-z0-9_]+":[[:space:]]*\{/ { print NR; exit }
+    ' "$PROVENANCE_FILE")
+    if [ -z "$HOST_END" ]; then
+        # macOS / BSD wc pads the line count with leading spaces; strip
+        # them so the diagnostic info line and sed line range stay clean.
+        HOST_END=$(wc -l < "$PROVENANCE_FILE" | tr -d ' ')
+    fi
+    HOST_SLICE_FILE="$WORKDIR/provenance-${ARCH}.json"
+    sed -n "${HOST_START},${HOST_END}p" "$PROVENANCE_FILE" > "$HOST_SLICE_FILE"
+    grep -q '"buildType":[[:space:]]*"https://' "$HOST_SLICE_FILE" \
+        || err "Docker image SLSA provenance: no buildType URL inside the '${PLATFORM}' slice (lines ${HOST_START}-${HOST_END})"
+    info "image provenance: SLSA present (${PLATFORM} slice carries buildType, lines ${HOST_START}-${HOST_END})"
 elif grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE"; then
     # Single-arch shape: no per-platform keys at all, .SLSA at root.
     # Matches the SBOM check's `if has($p) then .[$p] else . end`
