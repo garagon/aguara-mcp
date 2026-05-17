@@ -28,15 +28,9 @@ The agent doesn't know. It can't tell a helpful tool from a weaponized one. The 
 curl -fsSL https://raw.githubusercontent.com/garagon/mcp-aguara/main/install.sh | sh
 ```
 
-Or with Go:
+One command, one binary, no external dependencies. The release pipeline ships signed archives with checksums verified by the installer.
 
-```bash
-go install github.com/garagon/mcp-aguara@latest
-```
-
-One command, one binary, no external dependencies.
-
-> Make sure the install directory (`~/.local/bin` or `$GOPATH/bin`) is in your `PATH`.
+> Make sure the install directory (`~/.local/bin`) is in your `PATH`.
 
 ### Add to your AI agent
 

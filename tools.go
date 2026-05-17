@@ -494,13 +494,19 @@ var safeFilenameChars = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
 const ghaWorkflowPrefix = ".github/workflows/"
 
 // sanitizeFilename strips path components, restricts to safe characters, and caps length.
-// Exception: a leading `.github/workflows/` prefix is preserved when the
-// remainder is a single basename (no further path separators), so the
-// ci-trust analyzer registered by aguara v0.17 can match. The basename
-// itself is still sanitized through the same allowlist + dot strip + cap.
+// Exception: when `.github/workflows/` appears anywhere in the path, the
+// canonical prefix plus a sanitized basename is preserved so the ci-trust
+// analyzer registered by aguara v0.17 can match. Windows separators are
+// normalized first so paths like `C:\repo\.github\workflows\ci.yml` and
+// relative paths like `repo/.github/workflows/ci.yml` reach the analyzer
+// with the segment intact. Anything after the segment that contains a
+// further path separator (traversal or nested subdirs) falls back to the
+// default basename strip.
 func sanitizeFilename(name string) string {
-	if rest, ok := strings.CutPrefix(name, ghaWorkflowPrefix); ok {
-		if rest != "" && !strings.ContainsAny(rest, `/\`) {
+	normalized := strings.ReplaceAll(name, `\`, `/`)
+	if idx := strings.Index(normalized, ghaWorkflowPrefix); idx >= 0 {
+		rest := normalized[idx+len(ghaWorkflowPrefix):]
+		if rest != "" && !strings.Contains(rest, "/") {
 			base := sanitizeBasename(rest)
 			if base != "skill.md" {
 				return ghaWorkflowPrefix + base

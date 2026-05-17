@@ -158,22 +158,29 @@ func TestSanitizeFilename(t *testing.T) {
 		{strings.Repeat("a", 100) + ".md", strings.Repeat("a", 64)},
 
 		// .github/workflows/ exception (v0.17 ci-trust analyzer path requirement).
-		// Basename is still sanitized; the prefix survives only when the rest is
-		// a single safe basename with no further path separators.
+		// Basename is still sanitized; the segment survives only when the rest
+		// is a single safe basename with no further path separators.
 		{".github/workflows/ci.yml", ".github/workflows/ci.yml"},
 		{".github/workflows/release.yaml", ".github/workflows/release.yaml"},
 		{".github/workflows/file with spaces.yml", ".github/workflows/filewithspaces.yml"},
 		{".github/workflows/.config", ".github/workflows/config"},
-		// Path traversal under the prefix must not reach the analyzer with the
-		// prefix intact; falls back to plain basename strip.
+		// The segment is detected anywhere in the path, not only at the
+		// leading position. Repo-relative and absolute hints are common.
+		{"repo/.github/workflows/ci.yml", ".github/workflows/ci.yml"},
+		{"/abs/path/.github/workflows/ci.yml", ".github/workflows/ci.yml"},
+		// Windows separators are normalized before the segment search.
+		{`C:\repo\.github\workflows\ci.yml`, ".github/workflows/ci.yml"},
+		{`repo\.github\workflows\release.yaml`, ".github/workflows/release.yaml"},
+		// Path traversal under the segment must not reach the analyzer with
+		// the segment intact; falls back to plain basename strip.
 		{".github/workflows/../../etc/passwd", "passwd"},
 		{".github/workflows/./ci.yml", "ci.yml"},
 		{".github/workflows/sub/ci.yml", "ci.yml"},
-		// Empty basename under the prefix falls back to the default.
+		// Empty basename under the segment falls back to the default.
 		{".github/workflows/", "skill.md"},
-		// Only the canonical lower-case prefix is preserved; an upper-case
+		// Only the canonical lower-case segment is recognized; an upper-case
 		// variant falls through to the default basename strip (`.` allowed,
-		// so `ci.yml` survives but without the workflow prefix).
+		// so `ci.yml` survives but without the workflow segment).
 		{".GITHUB/workflows/ci.yml", "ci.yml"},
 	}
 
