@@ -44,9 +44,15 @@ func prop(typ, desc string) map[string]any {
 func scanContentTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name: "scan_content",
-		Description: "Scan the content of an AI agent skill or MCP server description for security issues. " +
-			"Checks for prompt injection, credential leaks, exfiltration, command execution, and more. " +
-			"Supports context-aware scanning with tool_name for false-positive reduction.",
+		Description: "Scan text for security threats before acting on it. Works on agent skills, " +
+			"READMEs, tool definitions, MCP server descriptions, prompts, package manifest content " +
+			"(package.json), and GitHub Actions workflow YAML when filename contains " +
+			"`.github/workflows/`. Detects prompt injection (pattern + NLP), credential leaks, " +
+			"data exfiltration, command execution, supply-chain patterns, MCP attacks, package " +
+			"metadata risks, JavaScript install-time payload shapes, GitHub Actions trust chains, " +
+			"and Unicode / encoding evasion. Findings are categorized by severity with remediation " +
+			"hints. Sensitive matches are redacted before output. Supports context-aware " +
+			"false-positive reduction via tool_name.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -70,8 +76,12 @@ func scanContentTool() *mcp.Tool {
 func checkMCPConfigTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name: "check_mcp_config",
-		Description: "Check an MCP server configuration (JSON) for security issues. " +
-			"Detects dangerous command patterns, credential exposure, and unsafe settings.",
+		Description: "Check an MCP server configuration (JSON) for security issues before adding " +
+			"it to a client. Detects dangerous command shapes in `command`/`args`, credential " +
+			"exposure in `env`, unsafe argument injection, and tool-poisoning patterns. Use on " +
+			"any MCP server config block (`mcpServers` entries from Claude Desktop, Cursor, VS " +
+			"Code, etc.) before installing or enabling it. Sensitive matches are redacted in " +
+			"the response.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -92,8 +102,12 @@ func checkMCPConfigTool() *mcp.Tool {
 
 func listRulesTool() *mcp.Tool {
 	return &mcp.Tool{
-		Name:        "list_rules",
-		Description: "List available security rules. Optionally filter by category.",
+		Name: "list_rules",
+		Description: "List the security rules cataloged by Aguara. Returns 219 detections (193 " +
+			"YAML pattern rules + 26 analyzer-emitted rules from jsrisk, toxicflow, pkgmeta, " +
+			"ci-trust, NLP, and rug-pull analyzers) spanning multiple threat categories. " +
+			"Optionally filter by category (e.g. `prompt-injection`, `exfiltration`, " +
+			"`credential-leak`, `supply-chain`, `mcp-attack`, `toxic-flow`).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -110,8 +124,12 @@ func listRulesTool() *mcp.Tool {
 
 func explainRuleTool() *mcp.Tool {
 	return &mcp.Tool{
-		Name:        "explain_rule",
-		Description: "Get detailed information about a specific security rule, including its patterns and examples.",
+		Name: "explain_rule",
+		Description: "Get detailed information about a specific security rule by ID. Resolves " +
+			"both YAML rules (returns patterns plus true/false-positive examples) and " +
+			"analyzer-emitted rules from jsrisk, toxicflow, pkgmeta, ci-trust, NLP, and " +
+			"rug-pull (returns severity, category, analyzer name, description, and remediation; " +
+			"analyzer rules have no inline patterns or examples).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -130,9 +148,12 @@ func explainRuleTool() *mcp.Tool {
 func discoverMCPTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name: "discover_mcp",
-		Description: "Discover MCP server configurations on the local machine. " +
-			"Finds all known MCP client config files (Claude Desktop, Cursor, VS Code, etc.) " +
-			"and extracts the server definitions, including commands, arguments, and environment variables.",
+		Description: "Discover MCP server configurations on the local machine by reading known " +
+			"MCP client config files (Claude Desktop, Cursor, VS Code, Windsurf, and others). " +
+			"Returns the server definitions including commands, arguments, and environment " +
+			"variables. Read-only: this tool never executes the discovered commands and never " +
+			"connects to any server; pair with `check_mcp_config` to evaluate each definition " +
+			"before acting on it.",
 		InputSchema: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{},
