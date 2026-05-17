@@ -51,7 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/garagon/mcp-aguara/main/install.sh 
 
 One command, one binary, no external dependencies. The installer verifies SHA256 checksums before extracting and fails closed if no sha256 verifier is available on the host (no silent skip).
 
-> Make sure the install directory (`~/.local/bin`) is in your `PATH`. The binary is statically linked with the Aguara rule catalog and analyzers compiled in so all MCP scans run fully offline. Aguara core's OSV-derived threat-intel snapshot is **not** bundled in this binary because the MCP does not expose repository-wide dependency checks yet; use the Aguara CLI for those (see [What still requires the Aguara CLI](#what-still-requires-the-aguara-cli)).
+> Make sure the install directory (`~/.local/bin`) is in your `PATH`. The binary is statically linked with the Aguara rule catalog and analyzers compiled in so all MCP scans run fully offline. Aguara core's OSV-derived threat-intel snapshot is **not** bundled in this binary because the MCP does not expose repository-wide dependency checks yet; use the Aguara CLI for those (see [garagon/aguara](https://github.com/garagon/aguara) for install + usage).
 
 ### Add to your AI agent
 
