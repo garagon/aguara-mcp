@@ -439,12 +439,16 @@ func formatScanResult(result *aguara.ScanResult) string {
 		sevName := f.Severity.String()
 		counts[sevName]++
 		// Defense in depth: aguara core already scrubs MatchedText in
-		// place when Sensitive=true (see types.RedactSensitiveFindings),
-		// but the MCP keeps its own guard so a future core regression
-		// or a bypass of in-place redaction cannot leak the raw secret
+		// place via types.RedactSensitiveFindings, which fires on both
+		// the Sensitive=true flag (cred+exfil combos, NLP combos,
+		// toxic-flow cred reads) AND the legacy credential-leak
+		// category (the built-in CRED_* rules predate the Sensitive
+		// flag and rely on category-based redaction). The MCP keeps
+		// its own guard mirroring that exact predicate so a future
+		// core regression or a bypass cannot leak the raw secret
 		// through this formatter. Idempotent when core has already run.
 		matchedText := f.MatchedText
-		if f.Sensitive && matchedText != "" {
+		if matchedText != "" && (f.Sensitive || f.Category == "credential-leak") {
 			matchedText = redactedPlaceholder
 		}
 		findings = append(findings, findingOut{

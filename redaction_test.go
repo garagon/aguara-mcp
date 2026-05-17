@@ -64,6 +64,42 @@ func TestMCPFormatScanResult_RedactsSensitiveMatchedText(t *testing.T) {
 	}
 }
 
+func TestMCPFormatScanResult_RedactsLegacyCredentialLeakCategory(t *testing.T) {
+	// Aguara core's RedactSensitiveFindings redacts on two signals:
+	// Finding.Sensitive=true (cred+exfil combos, NLP combos, toxic-flow
+	// cred reads, MCP_007) AND Finding.Category=="credential-leak" (the
+	// built-in CRED_* rules predate the Sensitive flag and rely on
+	// category-based redaction). A legacy CRED_001 / CRED_002 / ...
+	// finding arrives with Sensitive=false but a real secret in
+	// MatchedText, so the MCP's defense-in-depth guard must mirror the
+	// same dual predicate. Without this, a bypass of core's in-place
+	// scrub would still leak the literal secret for every CRED_* rule.
+	const apiKey = "AKIAIOSFODNN7EXAMPLE"
+	result := &aguara.ScanResult{
+		Findings: []aguara.Finding{{
+			RuleID:      "CRED_005",
+			RuleName:    "AWS access key",
+			Severity:    aguara.SeverityCritical,
+			Category:    "credential-leak",
+			Line:        3,
+			MatchedText: apiKey,
+			Sensitive:   false, // legacy category-only contract
+		}},
+		FilesScanned: 1,
+		RulesLoaded:  219,
+		Verdict:      aguara.VerdictBlock,
+	}
+
+	out := formatScanResult(result)
+
+	if strings.Contains(out, apiKey) {
+		t.Fatalf("LEAK: literal credential-leak finding's MatchedText appears in MCP output (Sensitive=false, Category=credential-leak)")
+	}
+	if !strings.Contains(out, redactedPlaceholder) {
+		t.Errorf("expected %q placeholder for credential-leak finding, did not find it", redactedPlaceholder)
+	}
+}
+
 func TestMCPFormatScanResult_RedactsSensitiveContext(t *testing.T) {
 	// The MCP formatter does not currently expose Finding.Context. This
 	// test pins both invariants at once: a Sensitive finding's Context
