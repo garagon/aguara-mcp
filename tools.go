@@ -105,9 +105,9 @@ func listRulesTool() *mcp.Tool {
 		Name: "list_rules",
 		Description: "List the security rules cataloged by Aguara. Returns 219 detections (193 " +
 			"YAML pattern rules + 26 analyzer-emitted rules from jsrisk, toxicflow, pkgmeta, " +
-			"ci-trust, NLP, and rug-pull analyzers) across 13 threat categories. Optionally " +
-			"filter by category (e.g. `prompt-injection`, `exfiltration`, `credential-leak`, " +
-			"`supply-chain`, `mcp-attack`).",
+			"ci-trust, NLP, and rug-pull analyzers) spanning multiple threat categories. " +
+			"Optionally filter by category (e.g. `prompt-injection`, `exfiltration`, " +
+			"`credential-leak`, `supply-chain`, `mcp-attack`, `toxic-flow`).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
