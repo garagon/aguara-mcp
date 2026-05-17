@@ -41,6 +41,10 @@ case "$(uname -m)" in
 esac
 
 ARCHIVE="aguara-mcp_${VERSION_STRIPPED}_${OS}_${ARCH}.tar.gz"
+# Used to scope multi-arch docker pulls / attestation lookups so the
+# verification fails when the host-arch manifest is missing or when
+# Apple Silicon falls back to emulating linux/amd64 under Rosetta.
+PLATFORM="linux/${ARCH}"
 
 need curl; need tar; need cosign; need docker; need jq
 if command -v sha256sum >/dev/null 2>&1; then
@@ -93,8 +97,13 @@ cosign verify "${IMAGE}:${VERSION_STRIPPED}" \
 info "image signature verified"
 
 green ">> 6/6 Docker image runs natively on host arch and reports the right version"
-docker pull "${IMAGE}:${VERSION_STRIPPED}" >/dev/null 2>&1 || err "docker pull failed (image likely missing linux/${ARCH} manifest)"
-DOCKER_VERSION=$(docker run --rm "${IMAGE}:${VERSION_STRIPPED}" --version | awk 'NR==1 {print $2}')
+# Force --platform so a missing linux/${ARCH} manifest cannot pass via
+# Apple Silicon's Rosetta fallback to linux/amd64, and so a globally
+# set DOCKER_DEFAULT_PLATFORM does not silently change what gets
+# verified. The pull explicitly fails when the manifest is absent.
+docker pull --platform "$PLATFORM" "${IMAGE}:${VERSION_STRIPPED}" >/dev/null 2>&1 \
+    || err "docker pull --platform ${PLATFORM} failed (image likely missing the ${PLATFORM} manifest)"
+DOCKER_VERSION=$(docker run --rm --platform "$PLATFORM" "${IMAGE}:${VERSION_STRIPPED}" --version | awk 'NR==1 {print $2}')
 [ "$DOCKER_VERSION" = "$VERSION_STRIPPED" ] || err "docker image reports version '${DOCKER_VERSION}', expected '${VERSION_STRIPPED}'"
 info "docker version: ${DOCKER_VERSION}"
 
@@ -103,7 +112,6 @@ info "docker version: ${DOCKER_VERSION}"
 # publish them at the root with .SPDX / .SLSA. Try the per-platform
 # path first, fall back to the legacy single-arch shape so this
 # script keeps working if the image regresses to a single platform.
-PLATFORM="linux/${ARCH}"
 SBOM_JSON=$(docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json .SBOM}}')
 echo "$SBOM_JSON" | jq -e --arg p "$PLATFORM" \
     'if has($p) then .[$p].SPDX.SPDXID == "SPDXRef-DOCUMENT"
@@ -111,11 +119,19 @@ echo "$SBOM_JSON" | jq -e --arg p "$PLATFORM" \
     || err "Docker image SBOM (SPDX) missing or malformed for ${PLATFORM}"
 info "image SBOM: SPDX present (${PLATFORM})"
 
-# Provenance JSON sometimes embeds raw commit messages with literal
-# newlines, which strict jq rejects as control chars. The semantic
-# check we care about is "does the SLSA buildType URL appear in the
-# provenance blob", so a simple grep is more robust than parsing.
-docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json .Provenance}}' \
+# Provenance is also keyed by platform on multi-arch images. Scope
+# the buildType grep to the platform's slice before greping so a
+# regression that drops provenance for the host arch cannot pass
+# just because the other arch still has it. Provenance JSON sometimes
+# embeds raw commit messages with literal newlines that strict jq
+# rejects as control chars, so the grep stays as the final check
+# within the platform's extracted slice.
+PROVENANCE_JSON=$(docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json .Provenance}}')
+PLATFORM_PROVENANCE=$(echo "$PROVENANCE_JSON" \
+    | jq -c --arg p "$PLATFORM" 'if has($p) then .[$p] else . end' 2>/dev/null || true)
+[ -n "$PLATFORM_PROVENANCE" ] && [ "$PLATFORM_PROVENANCE" != "null" ] \
+    || err "Docker image SLSA provenance missing for ${PLATFORM}"
+echo "$PLATFORM_PROVENANCE" \
     | grep -q '"buildType":[[:space:]]*"https://' \
     || err "Docker image SLSA provenance missing or malformed for ${PLATFORM}"
 info "image provenance: SLSA present (${PLATFORM})"

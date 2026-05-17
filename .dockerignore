@@ -29,6 +29,7 @@ DOCS/
 # Local build artifacts
 aguara-mcp
 mcp-aguara
+dist/
 
 # Test files: not needed at runtime, reduces image size
 *_test.go
