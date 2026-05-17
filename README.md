@@ -190,7 +190,10 @@ Agent                  Aguara MCP
   │                          ├─ aguara.ScanContent()
   │                          │  or ScanContentAs() with tool context
   │                          │  (in-process, no disk I/O)
-  │                          │  219 detections · 7 analyzers
+  │                          │  219 detections · 6 active analyzers
+  │                          │  (pattern + ci-trust + pkgmeta +
+  │                          │   jsrisk + NLP + toxic-flow;
+  │                          │   rug-pull needs WithStateDir, n/a here)
   │                          │  NFKC normalization · FP reduction
   │                          │  sensitive matches redacted
   │◄─ verdict + findings ────┤
