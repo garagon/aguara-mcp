@@ -25,18 +25,12 @@ The agent doesn't know. It can't tell a helpful tool from a weaponized one. The 
 ## Quick start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/garagon/aguara-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/garagon/mcp-aguara/main/install.sh | sh
 ```
 
-Or with Go:
+One command, one binary, no external dependencies. The installer verifies SHA256 checksums before extracting.
 
-```bash
-go install github.com/garagon/aguara-mcp@latest
-```
-
-One command, one binary, no external dependencies.
-
-> Make sure the install directory (`~/.local/bin` or `$GOPATH/bin`) is in your `PATH`.
+> Make sure the install directory (`~/.local/bin`) is in your `PATH`.
 
 ### Add to your AI agent
 
@@ -223,8 +217,8 @@ claude mcp add aguara -- aguara-mcp --debug
 Build from source:
 
 ```bash
-git clone https://github.com/garagon/aguara-mcp.git
-cd aguara-mcp
+git clone https://github.com/garagon/mcp-aguara.git
+cd mcp-aguara
 make build    # → ./aguara-mcp
 make test     # runs all tests
 ```

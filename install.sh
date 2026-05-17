@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-REPO="garagon/aguara-mcp"
+REPO="garagon/mcp-aguara"
 BINARY="aguara-mcp"
 
 main() {

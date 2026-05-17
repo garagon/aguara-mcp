@@ -487,21 +487,48 @@ func formatSummary(total int, counts map[string]int) string {
 
 var safeFilenameChars = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
 
+// ghaWorkflowPrefix is preserved by sanitizeFilename so the v0.17 ci-trust
+// analyzer can fire on workflow YAML passed through scan_content. The
+// analyzer keys off the path component and would silently no-op if the
+// filename were stripped to bare basename.
+const ghaWorkflowPrefix = ".github/workflows/"
+
 // sanitizeFilename strips path components, restricts to safe characters, and caps length.
+// Exception: when `.github/workflows/` appears anywhere in the path, the
+// canonical prefix plus a sanitized basename is preserved so the ci-trust
+// analyzer registered by aguara v0.17 can match. Windows separators are
+// normalized first so paths like `C:\repo\.github\workflows\ci.yml` and
+// relative paths like `repo/.github/workflows/ci.yml` reach the analyzer
+// with the segment intact. Anything after the segment that contains a
+// further path separator (traversal or nested subdirs) falls back to the
+// default basename strip.
 func sanitizeFilename(name string) string {
-	// Remove any directory components.
+	normalized := strings.ReplaceAll(name, `\`, `/`)
+	if idx := strings.Index(normalized, ghaWorkflowPrefix); idx >= 0 {
+		rest := normalized[idx+len(ghaWorkflowPrefix):]
+		if rest != "" && !strings.Contains(rest, "/") {
+			base := sanitizeBasename(rest)
+			if base != "skill.md" {
+				return ghaWorkflowPrefix + base
+			}
+		}
+	}
+	return sanitizeBasename(name)
+}
+
+// sanitizeBasename is the shared core of sanitizeFilename: strip directory
+// components, drop leading dots, restrict to the allowlist, fall back to
+// skill.md when nothing safe remains, and cap length.
+func sanitizeBasename(name string) string {
 	i := strings.LastIndexAny(name, `/\`)
 	if i >= 0 {
 		name = name[i+1:]
 	}
-	// Remove leading dots to prevent hidden files.
 	name = strings.TrimLeft(name, ".")
-	// Strip any characters outside the allowlist.
 	name = safeFilenameChars.ReplaceAllString(name, "")
 	if name == "" {
 		return "skill.md"
 	}
-	// Cap length to prevent excessively long filenames.
 	if len(name) > 64 {
 		name = name[:64]
 	}

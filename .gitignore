@@ -1,6 +1,9 @@
 aguara-mcp
+mcp-aguara
 .claude/
 CLAUDE.md
+.DS_Store
+DOCS/
 
 # Tokens and secrets
 .mcpregistry_*_token
