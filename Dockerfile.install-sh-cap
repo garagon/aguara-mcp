@@ -1,0 +1,43 @@
+# Reproduces install.sh's execution path under --cap-drop ALL on
+# Alpine. The combination is what users of restrictive sandbox
+# runtimes (rootless Docker, Kubernetes with seccomp/cap-drop,
+# CI runners that lock down container privileges) actually run with,
+# so install.sh must not depend on CAP_CHOWN, CAP_SETUID, or
+# anything else stripped by --cap-drop ALL.
+#
+# Two contracts get exercised:
+#   1. tar extraction works without CAP_CHOWN (install.sh uses tar -xzof).
+#   2. Checksum verification fails closed if no sha256 utility is
+#      installed; install.sh refuses to install rather than silently
+#      skipping verification.
+#
+# This image runs install.sh end-to-end against a real GitHub release
+# so it needs outbound network access. Pair with `make test-install-sh-docker`
+# (which sets --cap-drop ALL and --security-opt no-new-privileges) to
+# reproduce the locked-down environment.
+
+FROM alpine:3.20
+
+# coreutils provides sha256sum. ca-certificates is required for curl
+# to verify github.com's TLS chain. tar handles the .tar.gz archive.
+RUN apk add --no-cache curl tar ca-certificates coreutils
+
+WORKDIR /test
+
+# install.sh is what we are testing; copy the working-tree copy so
+# this image exercises the version about to ship, not whatever the
+# latest release published.
+COPY install.sh /test/install.sh
+RUN chmod +x /test/install.sh
+
+# Install to /test/bin (writable from inside the container without
+# privilege escalation) rather than the script's default $HOME/.local/bin
+# so the failure surface stays in install.sh itself, not in HOME
+# resolution under root with reduced caps.
+ENV INSTALL_DIR=/test/bin
+RUN mkdir -p "$INSTALL_DIR"
+
+# The VERSION env var is honored by install.sh: when empty the script
+# resolves the latest release through the GitHub API; when set to
+# e.g. v0.6.0 it pins to that tag.
+ENTRYPOINT ["sh", "/test/install.sh"]
