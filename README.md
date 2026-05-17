@@ -50,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/garagon/mcp-aguara/main/install.sh 
 
 One command, one binary, no external dependencies. The installer verifies SHA256 checksums before extracting and fails closed if no sha256 verifier is available on the host (no silent skip).
 
-> Make sure the install directory (`~/.local/bin`) is in your `PATH`. The binary ships at ~10 MB because the Aguara core threat-intel snapshot is embedded so scans run fully offline.
+> Make sure the install directory (`~/.local/bin`) is in your `PATH`. The binary is statically linked with the Aguara rule catalog and analyzers compiled in so all MCP scans run fully offline. Aguara core's OSV-derived threat-intel snapshot is **not** bundled in this binary because the MCP does not expose repository-wide dependency checks yet; use the Aguara CLI for those (see [What still requires the Aguara CLI](#what-still-requires-the-aguara-cli)).
 
 ### Add to your AI agent
 
@@ -215,7 +215,7 @@ See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 Aguara MCP is itself security-hardened:
 
 - **No subprocess execution** — Aguara runs as an in-process Go library, eliminating PATH hijacking and binary substitution risks
-- **No network calls** — every scan is fully offline; the threat-intel snapshot is embedded at build time
+- **No network calls** — every MCP scan is fully offline. The Aguara rule catalog and analyzers are linked in at build time; the OSV-derived threat-intel snapshot is **not** bundled in the MCP binary because the MCP does not expose repository-wide dependency checks (use the Aguara CLI for those)
 - **Input validation** — Rule IDs validated against strict format, content size capped at 10 MB
 - **Filename sanitization** — Allowlisted characters only, length-capped, no path traversal; the canonical `.github/workflows/<basename>` prefix is preserved so the v0.17 ci-trust analyzer can reach workflow YAML
 - **Sensitivity-based output redaction** — Findings marked `Sensitive=true` by Aguara core (cred+exfil combos, toxic-flow cred reads, MCP_007) or belonging to the `credential-leak` category have their `matched_text` replaced with `[REDACTED]` before the MCP serializes the response; the MCP keeps its own defensive guard in addition to Aguara's in-place scrub
