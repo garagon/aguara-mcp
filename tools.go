@@ -17,6 +17,11 @@ const scanTimeout = 30 * time.Second
 
 const maxContentSize = 10 << 20 // 10 MB
 
+// redactedPlaceholder mirrors types.RedactedPlaceholder from aguara core.
+// Kept as a local constant so the MCP's defensive Sensitive check has a
+// stable replacement value even if a future core release renames it.
+const redactedPlaceholder = "[REDACTED]"
+
 var validRuleID = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,63}$`)
 
 // RegisterTools registers all aguara tools on the MCP server.
@@ -433,6 +438,15 @@ func formatScanResult(result *aguara.ScanResult) string {
 	for _, f := range result.Findings {
 		sevName := f.Severity.String()
 		counts[sevName]++
+		// Defense in depth: aguara core already scrubs MatchedText in
+		// place when Sensitive=true (see types.RedactSensitiveFindings),
+		// but the MCP keeps its own guard so a future core regression
+		// or a bypass of in-place redaction cannot leak the raw secret
+		// through this formatter. Idempotent when core has already run.
+		matchedText := f.MatchedText
+		if f.Sensitive && matchedText != "" {
+			matchedText = redactedPlaceholder
+		}
 		findings = append(findings, findingOut{
 			Severity:    sevName,
 			RuleID:      f.RuleID,
@@ -442,7 +456,7 @@ func formatScanResult(result *aguara.ScanResult) string {
 			Remediation: f.Remediation,
 			Line:        f.Line,
 			Column:      f.Column,
-			MatchedText: f.MatchedText,
+			MatchedText: matchedText,
 			InCodeBlock: f.InCodeBlock,
 			Score:       f.Score,
 			Confidence:  f.Confidence,
