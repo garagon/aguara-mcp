@@ -1,4 +1,4 @@
-.PHONY: build test lint install clean
+.PHONY: build test lint clean
 
 build:
 	go build -o aguara-mcp .
@@ -9,8 +9,5 @@ test:
 lint:
 	golangci-lint run ./...
 
-install:
-	go install .
-
 clean:
-	rm -f aguara-mcp
+	rm -f aguara-mcp mcp-aguara

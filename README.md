@@ -28,7 +28,7 @@ The agent doesn't know. It can't tell a helpful tool from a weaponized one. The 
 curl -fsSL https://raw.githubusercontent.com/garagon/mcp-aguara/main/install.sh | sh
 ```
 
-One command, one binary, no external dependencies. The release pipeline ships signed archives with checksums verified by the installer.
+One command, one binary, no external dependencies. The installer verifies SHA256 checksums before extracting.
 
 > Make sure the install directory (`~/.local/bin`) is in your `PATH`.
 
