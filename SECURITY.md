@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Aguara MCP, please report it responsibly through [GitHub Security Advisories](https://github.com/garagon/aguara-mcp/security/advisories/new).
+If you discover a security vulnerability in Aguara MCP, please report it responsibly through [GitHub Security Advisories](https://github.com/garagon/mcp-aguara/security/advisories/new).
 
 **Do not** open a public issue for security vulnerabilities.
 

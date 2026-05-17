@@ -1,7 +1,7 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/garagon/aguara v0.14.4 h1:YBqjoGI8bZe64AKb/VZf40WNg9ewMWeqiZeg0W91ndM=
-github.com/garagon/aguara v0.14.4/go.mod h1:njU1wgwlHIKnH1mmPua7ifNbzkRERnMyNndLBmMWk4A=
+github.com/garagon/aguara v0.17.0 h1:dZ5KE3M62uN0ssaBP/dv+LOVsuulAwfKWK1lH9I0sCc=
+github.com/garagon/aguara v0.17.0/go.mod h1:njU1wgwlHIKnH1mmPua7ifNbzkRERnMyNndLBmMWk4A=
 github.com/golang-jwt/jwt/v5 v5.3.0 h1:pv4AsKCKKZuqlgs5sUmn4x8UlGa0kEVt/puTpKx9vvo=
 github.com/golang-jwt/jwt/v5 v5.3.0/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
