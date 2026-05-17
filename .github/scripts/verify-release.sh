@@ -150,10 +150,20 @@ info "image SBOM: SPDX present (${PLATFORM})"
 # read from disk and avoids the SIGPIPE path entirely.
 PROVENANCE_FILE="$WORKDIR/provenance.json"
 docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json .Provenance}}' > "$PROVENANCE_FILE"
-grep -q "\"${PLATFORM}\":" "$PROVENANCE_FILE" \
-    || err "Docker image SLSA provenance missing: '${PLATFORM}' key absent from .Provenance map"
-grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE" \
-    || err "Docker image SLSA provenance: no buildType URL in the provenance blob for ${PLATFORM}"
-info "image provenance: SLSA present (${PLATFORM} key + buildType detected)"
+if grep -q "\"${PLATFORM}\":" "$PROVENANCE_FILE"; then
+    # Multi-arch shape: per-platform map. The platform key marks the
+    # produced unit and a buildType URL has to appear somewhere in the
+    # provenance blob.
+    grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE" \
+        || err "Docker image SLSA provenance: no buildType URL in the provenance blob for ${PLATFORM}"
+    info "image provenance: SLSA present (${PLATFORM} key + buildType detected)"
+elif grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE"; then
+    # Single-arch fallback shape: .SLSA at root, no per-platform map.
+    # Matches the SBOM check's `if has($p) then .[$p] else . end`
+    # fallback. The buildType URL still has to appear.
+    info "image provenance: SLSA present (root shape, single-arch)"
+else
+    err "Docker image SLSA provenance missing for ${PLATFORM} (no platform key and no root buildType)"
+fi
 
 green ">> ALL CHECKS PASSED for ${VERSION} (${OS}/${ARCH})"
