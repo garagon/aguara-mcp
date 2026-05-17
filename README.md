@@ -2,9 +2,29 @@
 
 **Security advisor for AI agents.**
 
-Aguara MCP is an [MCP server](https://modelcontextprotocol.io/) that gives AI agents the ability to scan skills, plugins, and MCP configurations for security threats — before installing or running them. Built on the [official MCP SDK](https://github.com/modelcontextprotocol/go-sdk) (v1, Tier 1).
+Aguara MCP is an [MCP server](https://modelcontextprotocol.io/) that gives AI agents the ability to scan skills, plugins, and MCP configurations for security threats before installing or running them. Built on the [official MCP SDK](https://github.com/modelcontextprotocol/go-sdk) (v1, Tier 1).
 
-Powered by [Aguara](https://github.com/garagon/aguara), the open-source security scanner purpose-built for the AI agent ecosystem. 177 rules, 13 threat categories, four analysis layers (pattern, NLP, taint tracking, rug-pull detection), context-aware false-positive reduction, Unicode evasion prevention, zero network access.
+Powered by [Aguara](https://github.com/garagon/aguara), the open-source security scanner purpose-built for the AI agent ecosystem. v0.6.0 aligns the MCP with Aguara v0.17.0: 219 cataloged detections (193 YAML pattern rules + 26 analyzer-emitted), seven analyzers (pattern, ci-trust, pkgmeta, jsrisk, NLP, toxic-flow, rug-pull), sensitivity-based output redaction, context-aware false-positive reduction, Unicode evasion prevention, zero network access.
+
+## What this MCP can do
+
+Aguara MCP runs in-process: it imports the Aguara scanner as a Go library and exposes five read-only tools over MCP stdio.
+
+- Scan arbitrary text for security threats (`scan_content`)
+- Check an MCP server configuration before installing it (`check_mcp_config`)
+- List and explain rules from the v0.17 catalog (`list_rules`, `explain_rule`)
+- Discover MCP server definitions on the local machine without executing them (`discover_mcp`)
+
+## What still requires the Aguara CLI
+
+Repository-wide dependency checks are intentionally **not** exposed as MCP tools in v0.6.0. The Aguara CLI walks a repo's lockfiles recursively across npm, PyPI, Go, Rust, PHP, Ruby, Java, and .NET and matches every declared package against the embedded OSV-derived threat-intel snapshot. Use the CLI for that workflow:
+
+```bash
+aguara check .          # one-shot dependency surface check
+aguara audit . --ci     # CI gate combining scan + check with a single exit code
+```
+
+These will land in a future MCP release once Aguara core exposes a stable public `Check` API; see [garagon/aguara](https://github.com/garagon/aguara) for the CLI install path.
 
 ## The problem
 
@@ -28,9 +48,9 @@ The agent doesn't know. It can't tell a helpful tool from a weaponized one. The 
 curl -fsSL https://raw.githubusercontent.com/garagon/mcp-aguara/main/install.sh | sh
 ```
 
-One command, one binary, no external dependencies. The installer verifies SHA256 checksums before extracting.
+One command, one binary, no external dependencies. The installer verifies SHA256 checksums before extracting and fails closed if no sha256 verifier is available on the host (no silent skip).
 
-> Make sure the install directory (`~/.local/bin`) is in your `PATH`.
+> Make sure the install directory (`~/.local/bin`) is in your `PATH`. The binary is statically linked with the Aguara rule catalog and analyzers compiled in so all MCP scans run fully offline. Aguara core's OSV-derived threat-intel snapshot is **not** bundled in this binary because the MCP does not expose repository-wide dependency checks yet; use the Aguara CLI for those (see [What still requires the Aguara CLI](#what-still-requires-the-aguara-cli)).
 
 ### Add to your AI agent
 
@@ -60,7 +80,7 @@ Your agent now has a security advisor.
 
 ### `scan_content`
 
-Scan text for security threats. Use it on skill descriptions, tool definitions, READMEs, or any untrusted content before acting on it. Supports context-aware scanning to reduce false positives when the originating tool is known.
+Scan text for security threats before acting on it. Works on agent skills, READMEs, tool definitions, MCP server descriptions, prompts, package manifest content (`package.json`), and GitHub Actions workflow YAML when the `filename` argument contains `.github/workflows/`. Detects prompt injection (pattern + NLP), credential leaks, exfiltration, command execution, supply-chain patterns, MCP attacks, package metadata risks, JavaScript install-time payload shapes, GitHub Actions trust chains, and Unicode/encoding evasion. **Sensitive matches are redacted** in the response: when a finding is marked `Sensitive=true` (cred+exfil combos, toxic-flow cred reads, MCP_007) or belongs to the `credential-leak` category, `matched_text` is replaced with `[REDACTED]` so the scanner never creates a second copy of the secret. Supports context-aware false-positive reduction via `tool_name`.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -75,7 +95,7 @@ Returns a structured report with verdict (`clean`, `flag`, or `block`), severity
 
 ### `check_mcp_config`
 
-Analyze an MCP server configuration for dangerous patterns — exposed credentials, unsafe commands, overly permissive settings.
+Check an MCP server configuration (JSON) for security issues before adding it to a client. Detects dangerous command shapes in `command`/`args`, credential exposure in `env`, unsafe argument injection, and tool-poisoning patterns. Use on any `mcpServers` entry from Claude Desktop, Cursor, VS Code, or other MCP clients before enabling it. Sensitive matches are redacted in the response.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -86,7 +106,7 @@ Analyze an MCP server configuration for dangerous patterns — exposed credentia
 
 ### `list_rules`
 
-Browse the full rule database. Useful when the agent needs to understand what threat categories exist or what Aguara can detect.
+Browse the cataloged security rules. Returns 219 detections (193 YAML pattern rules + 26 analyzer-emitted rules from jsrisk, toxicflow, pkgmeta, ci-trust, NLP, and rug-pull analyzers) spanning multiple threat categories. Useful when the agent needs to understand what Aguara can detect or filter by category.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -94,7 +114,7 @@ Browse the full rule database. Useful when the agent needs to understand what th
 
 ### `explain_rule`
 
-Get details about a specific rule — what it detects, its patterns, and examples of true/false positives.
+Get detailed information about a specific rule by ID. Resolves both YAML rules (returns patterns plus true/false-positive examples) and analyzer-emitted rule IDs from jsrisk, toxicflow, pkgmeta, ci-trust, NLP, and rug-pull (returns severity, category, analyzer name, description, and remediation; analyzer rules have no inline patterns or examples).
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -102,7 +122,7 @@ Get details about a specific rule — what it detects, its patterns, and example
 
 ### `discover_mcp`
 
-Discover MCP server configurations on the local machine. Scans known config paths for Claude Desktop, Cursor, VS Code, Windsurf, and other MCP clients. Returns all server definitions with their commands, arguments, and environment variables.
+Discover MCP server configurations on the local machine by reading known MCP client config files (Claude Desktop, Cursor, VS Code, Windsurf, and others). Returns the server definitions including commands, arguments, and environment variables. **Read-only**: this tool never executes the discovered commands and never connects to any server. Pair with `check_mcp_config` to evaluate each definition before acting on it.
 
 No parameters required.
 
@@ -149,25 +169,17 @@ Without Aguara MCP, the agent would have installed it silently.
 
 ## Coverage
 
-177 pattern rules across 13 threat categories, plus NLP and toxic-flow analyzers:
+The v0.17 Aguara catalog totals **219 detections** (193 YAML pattern rules + 26 analyzer-emitted) across seven analyzers:
 
-| Category | Rules | Detects |
-|----------|-------|---------|
-| Credential leak | 22 | API keys, tokens, secrets in plain text, .env file exposure |
-| Supply chain | 21 | Dependency confusion, typosquatting |
-| Prompt injection | 18+ | Instruction override, jailbreaks, role hijacking (+ NLP) |
-| Exfiltration | 16+ | Data sent to attacker-controlled endpoints (+ NLP) |
-| External download | 16 | curl\|bash, remote script execution |
-| MCP attacks | 16 | Tool poisoning, permission escalation |
-| Command execution | 15 | Shell injection, subprocess spawning |
-| Indirect injection | 11 | Injection via external content |
-| MCP config | 11 | Insecure server configurations |
-| SSRF / Cloud | 11 | Metadata endpoint access, SSRF patterns |
-| Third-party content | 10 | Unvalidated external data consumption |
-| Unicode attacks | 10 | Homoglyphs, bidi overrides, invisible chars |
-| Toxic flow | 3 | Dangerous multi-step tool chains (rug-pull detection) |
+- **Pattern matcher** — regex / contains rules covering prompt injection, credential leaks, exfiltration, command execution, supply-chain patterns, MCP attacks, indirect injection, external download, SSRF/cloud, third-party content, and Unicode attacks. Content is NFKC-normalized before scanning to prevent Unicode evasion.
+- **CI trust** — YAML-aware analysis of `.github/workflows/*.yml` for pwn-request chains, cache poisoning, OIDC token surface, and persisted-credentials checkout patterns. Reachable from MCP when the `filename` argument contains `.github/workflows/`.
+- **PkgMeta** — `package.json` analysis for install-time lifecycle scripts paired with git-sourced dependencies, optional-git deps, and publish-surface chains.
+- **JSRisk** — `.js`/`.mjs`/`.cjs` analysis for obfuscator-shape payloads, install-time daemonization, CI secret harvesting, runner process-memory pivots, and known IOCs (e.g. the May 2026 node-ipc DNS-TXT exfil chain).
+- **NLP** — Goldmark-based markdown analysis for prompt-injection, authority-claim, and credential-transmission combos that evade static patterns.
+- **Toxic flow** — single-file taint tracking plus cross-file correlation for dangerous capability combinations.
+- **Rug-pull** — SHA256-based change detection on tool descriptions over time (used by the Aguara CLI; not currently invoked by MCP tools).
 
-Additionally, the NLP injection analyzer detects threats that evade static patterns, and content is NFKC-normalized before scanning to prevent Unicode evasion attacks.
+See [garagon/aguara](https://github.com/garagon/aguara) for the canonical category list and rule IDs.
 
 ## How it works
 
@@ -178,8 +190,12 @@ Agent                  Aguara MCP
   │                          ├─ aguara.ScanContent()
   │                          │  or ScanContentAs() with tool context
   │                          │  (in-process, no disk I/O)
-  │                          │  177 rules · 4 analysis layers
+  │                          │  219 detections · 6 active analyzers
+  │                          │  (pattern + ci-trust + pkgmeta +
+  │                          │   jsrisk + NLP + toxic-flow;
+  │                          │   rug-pull needs WithStateDir, n/a here)
   │                          │  NFKC normalization · FP reduction
+  │                          │  sensitive matches redacted
   │◄─ verdict + findings ────┤
   │                          │
   ├─ discover_mcp() ────────►│
@@ -202,8 +218,11 @@ See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 Aguara MCP is itself security-hardened:
 
 - **No subprocess execution** — Aguara runs as an in-process Go library, eliminating PATH hijacking and binary substitution risks
+- **No network calls** — every MCP scan is fully offline. The Aguara rule catalog and analyzers are linked in at build time; the OSV-derived threat-intel snapshot is **not** bundled in the MCP binary because the MCP does not expose repository-wide dependency checks (use the Aguara CLI for those)
 - **Input validation** — Rule IDs validated against strict format, content size capped at 10 MB
-- **Filename sanitization** — Allowlisted characters only, length-capped, no path traversal
+- **Filename sanitization** — Allowlisted characters only, length-capped, no path traversal; the canonical `.github/workflows/<basename>` prefix is preserved so the v0.17 ci-trust analyzer can reach workflow YAML
+- **Sensitivity-based output redaction** — Findings marked `Sensitive=true` by Aguara core (cred+exfil combos, toxic-flow cred reads, MCP_007) or belonging to the `credential-leak` category have their `matched_text` replaced with `[REDACTED]` before the MCP serializes the response; the MCP keeps its own defensive guard in addition to Aguara's in-place scrub
+- **Signed release pipeline** — release binaries are Cosign-signed with SPDX SBOMs attached, the multi-arch Docker image at `ghcr.io/garagon/mcp-aguara` is signed at digest with SLSA provenance and SBOM attestations; verify with `VERSION=v0.6.0 .github/scripts/verify-release.sh`
 - **Version integrity** — Aguara scanner version is pinned in `go.sum`, verified at build time
 
 ## Advanced
