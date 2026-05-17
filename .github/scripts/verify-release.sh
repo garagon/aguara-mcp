@@ -178,6 +178,14 @@ if grep -Eq '"(linux|darwin|windows)/[a-z0-9_]+":' "$PROVENANCE_FILE"; then
         # macOS / BSD wc pads the line count with leading spaces; strip
         # them so the diagnostic info line and sed line range stay clean.
         HOST_END=$(wc -l < "$PROVENANCE_FILE" | tr -d ' ')
+    else
+        # `sed -n a,bp` is inclusive on both ends. HOST_END is the LINE
+        # where the NEXT platform key starts. If the next platform's
+        # buildType appears on that line (would happen if the JSON
+        # collapses to compact form), an empty host slice would still
+        # see a buildType. Stop the slice ONE line earlier so the next
+        # platform's content is never visible to grep.
+        HOST_END=$((HOST_END - 1))
     fi
     HOST_SLICE_FILE="$WORKDIR/provenance-${ARCH}.json"
     sed -n "${HOST_START},${HOST_END}p" "$PROVENANCE_FILE" > "$HOST_SLICE_FILE"
