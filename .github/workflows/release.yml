@@ -2,15 +2,26 @@ name: Release
 
 on:
   push:
+    # GitHub Actions tag filters support regex-style metacharacters,
+    # including `+` for "one or more of the preceding character" (see
+    # https://docs.github.com/actions/writing-workflows/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet).
+    # `v[0-9]+.*` therefore matches semver tags like v0.6.0, v1.2.3,
+    # v10.0.0 and rejects accidental non-numeric tags like
+    # `vexperiment`. The same pattern has shipped every Aguara core
+    # release on this account since v0.15.0 without misfire.
     tags:
-      - "v*"
+      - "v[0-9]+.*"
 
 permissions:
   contents: write
+  # id-token: write is required for cosign keyless signing via Sigstore +
+  # GitHub OIDC. The token never leaves the runner.
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,6 +30,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+          cache: true
+          cache-dependency-path: go.sum
+
+      # cosign signs the checksums.txt produced by GoReleaser. Pinned
+      # to a specific release for reproducibility; bump via Dependabot.
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.7.0
+
+      # syft generates SPDX SBOMs that GoReleaser attaches to each archive.
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0.17.8
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

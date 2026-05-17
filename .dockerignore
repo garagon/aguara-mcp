@@ -1,15 +1,41 @@
-# Defensive baseline for the install-sh docker test images.
+# Default build context ignore. Applies when no per-Dockerfile ignore
+# file is present (e.g. `docker build .` or `docker build -f Dockerfile .`).
+# The runtime image COPYs the Go source tree to build the binary, so
+# this file is a denylist of things that must never reach the image:
+# gitignored secrets, the internal vault, CI metadata, local build
+# artifacts, and the other Dockerfiles used by the install-sh test
+# (those have their own per-Dockerfile ignore files).
 #
-# Docker does NOT honor .gitignore. Without a .dockerignore, the
-# entire repo root is sent to the Docker daemon as build context,
-# including gitignored secrets (.env, .mcpregistry_*_token, *.token),
-# the gitignored DOCS/ vault, and any local credentials. With a
-# remote Docker daemon (DOCKER_HOST=tcp://...) or a BuildKit cloud
-# builder, that context transits the network even though the
-# Dockerfiles only COPY install.sh.
-#
-# Pattern: deny everything, then re-allow the single file the
-# Dockerfiles need. Last-match-wins so * is overridden by !install.sh.
+# The install-sh test Dockerfiles use the restrictive per-file ignores
+# (Dockerfile.install-sh-cap.dockerignore, Dockerfile.install-sh-no-sha.dockerignore)
+# that allow only install.sh in context.
 
-*
-!install.sh
+# Source repo metadata and tooling
+.git/
+.github/
+.claude/
+CLAUDE.md
+.DS_Store
+
+# Internal vault (gitignored)
+DOCS/
+
+# Secrets (gitignored)
+.env
+.env.*
+*.token
+.mcpregistry_*_token
+
+# Local build artifacts
+aguara-mcp
+mcp-aguara
+dist/
+
+# Test files: not needed at runtime, reduces image size
+*_test.go
+
+# Other Dockerfiles + their per-file ignores
+Dockerfile.install-sh-cap
+Dockerfile.install-sh-no-sha
+Dockerfile.install-sh-cap.dockerignore
+Dockerfile.install-sh-no-sha.dockerignore
