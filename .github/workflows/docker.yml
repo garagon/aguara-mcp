@@ -2,6 +2,8 @@ name: Docker
 
 on:
   push:
+    # See release.yml for why this regex-style glob is correct in
+    # GitHub Actions tag filters. Same pattern, same justification.
     tags:
       - "v[0-9]+.*"
 
