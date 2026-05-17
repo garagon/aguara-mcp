@@ -487,21 +487,42 @@ func formatSummary(total int, counts map[string]int) string {
 
 var safeFilenameChars = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
 
+// ghaWorkflowPrefix is preserved by sanitizeFilename so the v0.17 ci-trust
+// analyzer can fire on workflow YAML passed through scan_content. The
+// analyzer keys off the path component and would silently no-op if the
+// filename were stripped to bare basename.
+const ghaWorkflowPrefix = ".github/workflows/"
+
 // sanitizeFilename strips path components, restricts to safe characters, and caps length.
+// Exception: a leading `.github/workflows/` prefix is preserved when the
+// remainder is a single basename (no further path separators), so the
+// ci-trust analyzer registered by aguara v0.17 can match. The basename
+// itself is still sanitized through the same allowlist + dot strip + cap.
 func sanitizeFilename(name string) string {
-	// Remove any directory components.
+	if rest, ok := strings.CutPrefix(name, ghaWorkflowPrefix); ok {
+		if rest != "" && !strings.ContainsAny(rest, `/\`) {
+			base := sanitizeBasename(rest)
+			if base != "skill.md" {
+				return ghaWorkflowPrefix + base
+			}
+		}
+	}
+	return sanitizeBasename(name)
+}
+
+// sanitizeBasename is the shared core of sanitizeFilename: strip directory
+// components, drop leading dots, restrict to the allowlist, fall back to
+// skill.md when nothing safe remains, and cap length.
+func sanitizeBasename(name string) string {
 	i := strings.LastIndexAny(name, `/\`)
 	if i >= 0 {
 		name = name[i+1:]
 	}
-	// Remove leading dots to prevent hidden files.
 	name = strings.TrimLeft(name, ".")
-	// Strip any characters outside the allowlist.
 	name = safeFilenameChars.ReplaceAllString(name, "")
 	if name == "" {
 		return "skill.md"
 	}
-	// Cap length to prevent excessively long filenames.
 	if len(name) > 64 {
 		name = name[:64]
 	}

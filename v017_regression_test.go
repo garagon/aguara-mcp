@@ -87,6 +87,47 @@ func TestV017_ScanContent_RedactsSensitiveMatchedTextThroughFormatter(t *testing
 	}
 }
 
+func TestV017_ScanContent_FiresCITrustOnWorkflowsPath(t *testing.T) {
+	// Aguara v0.17 registers the ci-trust analyzer which only fires when
+	// the target path contains `.github/workflows/`. The MCP's
+	// sanitizeFilename preserves this prefix as an explicit exception so
+	// scan_content can detect GHA_* findings (pwn-request, persisted creds,
+	// cache poisoning, OIDC). Regression lock: if sanitization ever strips
+	// the prefix, this test fails and the MCP starts silently missing
+	// every GHA rule it advertises in list_rules / explain_rule.
+	const pwnRequestWorkflow = `name: ci
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: ./build.sh
+`
+	result, err := aguara.ScanContent(context.Background(), pwnRequestWorkflow, ".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatalf("ScanContent failed: %v", err)
+	}
+	var ghaIDs []string
+	for _, f := range result.Findings {
+		if strings.HasPrefix(f.RuleID, "GHA_") {
+			ghaIDs = append(ghaIDs, f.RuleID)
+		}
+	}
+	if len(ghaIDs) == 0 {
+		var allIDs []string
+		for _, f := range result.Findings {
+			allIDs = append(allIDs, f.RuleID)
+		}
+		t.Fatalf("expected at least one GHA_* finding from ci-trust on pwn-request workflow; got %d findings with rule IDs %v",
+			len(result.Findings), allIDs)
+	}
+}
+
 func TestV017_Discover_DoesNotError(t *testing.T) {
 	// Smoke test for the discover_mcp tool's backing call. Discover walks
 	// local MCP client configs; on a clean machine it returns an empty
