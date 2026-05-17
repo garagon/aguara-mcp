@@ -119,21 +119,86 @@ echo "$SBOM_JSON" | jq -e --arg p "$PLATFORM" \
     || err "Docker image SBOM (SPDX) missing or malformed for ${PLATFORM}"
 info "image SBOM: SPDX present (${PLATFORM})"
 
-# Provenance is also keyed by platform on multi-arch images. Scope
-# the buildType grep to the platform's slice before greping so a
-# regression that drops provenance for the host arch cannot pass
-# just because the other arch still has it. Provenance JSON sometimes
-# embeds raw commit messages with literal newlines that strict jq
-# rejects as control chars, so the grep stays as the final check
-# within the platform's extracted slice.
-PROVENANCE_JSON=$(docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json .Provenance}}')
-PLATFORM_PROVENANCE=$(echo "$PROVENANCE_JSON" \
-    | jq -c --arg p "$PLATFORM" 'if has($p) then .[$p] else . end' 2>/dev/null || true)
-[ -n "$PLATFORM_PROVENANCE" ] && [ "$PLATFORM_PROVENANCE" != "null" ] \
-    || err "Docker image SLSA provenance missing for ${PLATFORM}"
-echo "$PLATFORM_PROVENANCE" \
-    | grep -q '"buildType":[[:space:]]*"https://' \
-    || err "Docker image SLSA provenance missing or malformed for ${PLATFORM}"
-info "image provenance: SLSA present (${PLATFORM})"
+# Provenance verification on multi-arch images is intentionally split
+# into two greps. jq cannot parse the .Provenance blob: docker buildx
+# imagetools embeds raw git commit messages with literal U+000A and
+# U+000D control characters, which strict JSON (per RFC 8259) and jq
+# both reject ("Invalid string: control characters from U+0000 through
+# U+001F must be escaped"). The previous attempt to extract the
+# per-platform slice with `jq -c 'if has($p) then .[$p] else . end'`
+# failed for exactly that reason and `2>/dev/null || true` masked the
+# error as "provenance missing", which then false-failed an otherwise
+# valid release (v0.6.0 hit this on the first run).
+#
+# Two-grep contract instead, both anchored to the platform:
+#   1. The "<platform>": key MUST be present in the .Provenance map.
+#      A regression that drops provenance for the host arch (mode=min
+#      on multi-arch, or a buildx version skew) shows up here.
+#   2. A SLSA buildType URL MUST appear in the blob. Catches "no
+#      provenance at all".
+# This is one degree less precise than per-platform-buildType binding
+# would be (two platforms could in theory each ship a key but only one
+# carry the buildType), but on `docker buildx build` with
+# `provenance: mode=max` the per-platform key is the actual produced
+# unit, so a key without a buildType inside it is not a shape this
+# pipeline can reach. Worth re-tightening if a future buildx release
+# splits those concerns.
+# Write the JSON to a temp file rather than echo + pipe: the
+# .Provenance blob can be ~76 KB and grep -q exits on first match,
+# which on a shell using sh's default SIGPIPE handling prints
+# "echo: write error: Broken pipe" warnings. Using a file makes grep
+# read from disk and avoids the SIGPIPE path entirely.
+PROVENANCE_FILE="$WORKDIR/provenance.json"
+docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json .Provenance}}' > "$PROVENANCE_FILE"
+# Detect map-vs-root shape first, then enforce. Order matters: if the
+# blob IS a per-platform map and the host platform is absent, the root
+# fallback would false-pass on another platform's buildType (e.g. an
+# amd64-only image false-passing arm64 verification). Only fall back to
+# the single-arch root shape when no per-platform key exists at all.
+if grep -Eq '"(linux|darwin|windows)/[a-z0-9_]+":' "$PROVENANCE_FILE"; then
+    # Multi-arch / per-platform map. The host platform key MUST be
+    # present AND a SLSA buildType must appear inside the host slice
+    # specifically. Scoping with sed by line range is required because
+    # jq cannot parse the .Provenance JSON: buildx embeds raw git
+    # commit messages with literal U+000A / U+000D control characters
+    # that strict JSON (RFC 8259) and jq both reject. The docker buildx
+    # imagetools template always emits multi-line JSON for this field,
+    # so line-range slicing is stable for our consumer; if a future
+    # buildx release switches to single-line output, this falls back
+    # to the bare host-key check below.
+    grep -q "\"${PLATFORM}\":" "$PROVENANCE_FILE" \
+        || err "Docker image SLSA provenance: '.Provenance' is a per-platform map but '${PLATFORM}' is missing"
+    HOST_START=$(grep -n "\"${PLATFORM}\":" "$PROVENANCE_FILE" | head -1 | cut -d: -f1)
+    # Find the line number of the NEXT per-platform key after the host
+    # platform (any os/arch). If none, fall through to end of file.
+    HOST_END=$(awk -v s="$HOST_START" '
+        NR > s && /"(linux|darwin|windows)\/[a-z0-9_]+":[[:space:]]*\{/ { print NR; exit }
+    ' "$PROVENANCE_FILE")
+    if [ -z "$HOST_END" ]; then
+        # macOS / BSD wc pads the line count with leading spaces; strip
+        # them so the diagnostic info line and sed line range stay clean.
+        HOST_END=$(wc -l < "$PROVENANCE_FILE" | tr -d ' ')
+    else
+        # `sed -n a,bp` is inclusive on both ends. HOST_END is the LINE
+        # where the NEXT platform key starts. If the next platform's
+        # buildType appears on that line (would happen if the JSON
+        # collapses to compact form), an empty host slice would still
+        # see a buildType. Stop the slice ONE line earlier so the next
+        # platform's content is never visible to grep.
+        HOST_END=$((HOST_END - 1))
+    fi
+    HOST_SLICE_FILE="$WORKDIR/provenance-${ARCH}.json"
+    sed -n "${HOST_START},${HOST_END}p" "$PROVENANCE_FILE" > "$HOST_SLICE_FILE"
+    grep -q '"buildType":[[:space:]]*"https://' "$HOST_SLICE_FILE" \
+        || err "Docker image SLSA provenance: no buildType URL inside the '${PLATFORM}' slice (lines ${HOST_START}-${HOST_END})"
+    info "image provenance: SLSA present (${PLATFORM} slice carries buildType, lines ${HOST_START}-${HOST_END})"
+elif grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE"; then
+    # Single-arch shape: no per-platform keys at all, .SLSA at root.
+    # Matches the SBOM check's `if has($p) then .[$p] else . end`
+    # fallback. The buildType URL still has to appear.
+    info "image provenance: SLSA present (root shape, single-arch)"
+else
+    err "Docker image SLSA provenance missing for ${PLATFORM} (no platform map and no root buildType)"
+fi
 
 green ">> ALL CHECKS PASSED for ${VERSION} (${OS}/${ARCH})"
