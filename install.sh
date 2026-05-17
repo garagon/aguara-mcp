@@ -43,8 +43,11 @@ main() {
     curl -fsSL -o "${tmpdir}/checksums.txt" "$checksums_url"
     verify_checksum "$tmpdir" "$archive"
 
-    # Extract binary
-    tar -xzf "${tmpdir}/${archive}" -C "$tmpdir"
+    # Extract binary. The `o` flag forces tar to extract files as the
+    # current user instead of trying to honor the archive uid/gid. This
+    # is required under `--cap-drop ALL` (no CAP_CHOWN), otherwise tar
+    # fails on fchown when it tries to restore the archive owner.
+    tar -xzof "${tmpdir}/${archive}" -C "$tmpdir"
 
     if [ ! -f "${tmpdir}/${BINARY}" ]; then
         err "binary not found in archive"
@@ -119,8 +122,11 @@ verify_checksum() {
     elif command -v shasum >/dev/null 2>&1; then
         actual=$(shasum -a 256 "${dir}/${file}" | awk '{print $1}')
     else
-        warn "sha256sum/shasum not found, skipping checksum verification"
-        return
+        # Fail closed: skipping checksum verification would defeat the
+        # supply-chain guarantee install.sh is supposed to provide.
+        # Install a sha256 utility (sha256sum from coreutils on Linux,
+        # shasum on macOS) or download + verify manually.
+        err "no sha256 verifier available (need sha256sum or shasum). Refusing to install without checksum verification."
     fi
     if [ "$actual" != "$expected" ]; then
         err "checksum mismatch: expected ${expected}, got ${actual}"

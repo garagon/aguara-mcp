@@ -1,0 +1,26 @@
+# Companion to Dockerfile.install-sh-cap. Strips every sha256 / shasum
+# utility from the image so install.sh exercises its fail-closed path.
+# Used by `make test-install-sh-docker` to lock the contract that
+# install.sh refuses to install without checksum verification rather
+# than silently skipping it.
+#
+# Alpine's busybox ships sha256sum as an applet symlink, so removing
+# /usr/bin and /bin variants is sufficient to make `command -v sha256sum`
+# and `command -v shasum` both return non-zero.
+
+FROM alpine:3.20
+
+# Deliberately do NOT install coreutils (which provides sha256sum).
+# curl + tar + ca-certificates are still needed for the download path.
+RUN apk add --no-cache curl tar ca-certificates && \
+    rm -f /usr/bin/sha256sum /usr/bin/shasum /bin/sha256sum /bin/shasum 2>/dev/null || true
+
+WORKDIR /test
+
+COPY install.sh /test/install.sh
+RUN chmod +x /test/install.sh
+
+ENV INSTALL_DIR=/test/bin
+RUN mkdir -p "$INSTALL_DIR"
+
+ENTRYPOINT ["sh", "/test/install.sh"]
