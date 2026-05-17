@@ -150,20 +150,25 @@ info "image SBOM: SPDX present (${PLATFORM})"
 # read from disk and avoids the SIGPIPE path entirely.
 PROVENANCE_FILE="$WORKDIR/provenance.json"
 docker buildx imagetools inspect "${IMAGE}:${VERSION_STRIPPED}" --format '{{json .Provenance}}' > "$PROVENANCE_FILE"
-if grep -q "\"${PLATFORM}\":" "$PROVENANCE_FILE"; then
-    # Multi-arch shape: per-platform map. The platform key marks the
-    # produced unit and a buildType URL has to appear somewhere in the
-    # provenance blob.
+# Detect map-vs-root shape first, then enforce. Order matters: if the
+# blob IS a per-platform map and the host platform is absent, the root
+# fallback would false-pass on another platform's buildType (e.g. an
+# amd64-only image false-passing arm64 verification). Only fall back to
+# the single-arch root shape when no per-platform key exists at all.
+if grep -Eq '"(linux|darwin|windows)/[a-z0-9_]+":' "$PROVENANCE_FILE"; then
+    # Multi-arch / per-platform map. Host platform key MUST be present.
+    grep -q "\"${PLATFORM}\":" "$PROVENANCE_FILE" \
+        || err "Docker image SLSA provenance: '.Provenance' is a per-platform map but '${PLATFORM}' is missing"
     grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE" \
         || err "Docker image SLSA provenance: no buildType URL in the provenance blob for ${PLATFORM}"
     info "image provenance: SLSA present (${PLATFORM} key + buildType detected)"
 elif grep -q '"buildType":[[:space:]]*"https://' "$PROVENANCE_FILE"; then
-    # Single-arch fallback shape: .SLSA at root, no per-platform map.
+    # Single-arch shape: no per-platform keys at all, .SLSA at root.
     # Matches the SBOM check's `if has($p) then .[$p] else . end`
     # fallback. The buildType URL still has to appear.
     info "image provenance: SLSA present (root shape, single-arch)"
 else
-    err "Docker image SLSA provenance missing for ${PLATFORM} (no platform key and no root buildType)"
+    err "Docker image SLSA provenance missing for ${PLATFORM} (no platform map and no root buildType)"
 fi
 
 green ">> ALL CHECKS PASSED for ${VERSION} (${OS}/${ARCH})"
