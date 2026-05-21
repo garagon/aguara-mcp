@@ -1,21 +1,11 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.garagon/aguara-mcp",
+  "name": "io.github.garagon/mcp-aguara",
   "title": "Aguara MCP",
   "description": "Security scanner for AI agent skills and MCP servers",
-  "version": "0.2.0",
+  "version": "0.6.1",
   "repository": {
-    "url": "https://github.com/garagon/aguara-mcp",
+    "url": "https://github.com/garagon/mcp-aguara",
     "source": "github"
-  },
-  "packages": [
-    {
-      "registryType": "mcpb",
-      "identifier": "https://github.com/garagon/aguara-mcp/releases/download/v0.2.0/aguara-mcp.mcpb",
-      "fileSha256": "59a187da83dd165b568a0d0f5df92a9510822dabba169d599822c54f34e5c1d0",
-      "transport": {
-        "type": "stdio"
-      }
-    }
-  ]
+  }
 }
