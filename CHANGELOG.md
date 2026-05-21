@@ -4,6 +4,31 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-20
+
+The v0.6.1 release aligns mcp-aguara with the Aguara v0.18.2 backend. It is a maintenance release: no new MCP tools, no change to existing tools' input schemas, no change to the binary name. The dependency bump pulls in core's redaction improvement for `MCPCFG_003` (hardcoded secrets in MCP server env blocks); the new rules added in Aguara v0.18.x are CLI-only (pnpm lockfile coverage, manual threat-intel snapshots for the May 2026 npm compromises) and do not change the MCP's tool surface.
+
+### Aligned
+
+- **Aguara core v0.17.0 -> v0.18.2.** No public API surface changes. The rulecatalog still totals 219 detections (193 YAML pattern rules + 26 analyzer-emitted), `explain_rule` continues to resolve both YAML and analyzer-emitted IDs.
+- **`MCPCFG_003` now ships with `sensitive: true` from core.** Aguara core v0.18.0 marked the "Hardcoded secrets in MCP env block" rule sensitive at the YAML level, so `RedactSensitiveFindings` scrubs `MatchedText` in place before the finding reaches the MCP formatter. The MCP's defensive `formatScanResult` guard already covered this case via the `Sensitive=true` predicate, so this change is defense-in-depth across two layers rather than a behaviour change.
+- **`server.json` aligned to the canonical repository.** The manifest now reports `version: 0.6.1` and the `io.github.garagon/mcp-aguara` identifier (the repository was renamed from `aguara-mcp` to `mcp-aguara` in v0.6.0; the manifest still pointed at the redirect). The `packages[]` entry was removed because the v0.2.0-era `.mcpb` artifact has not been regenerated on subsequent releases; a future release may reintroduce it under a build pipeline that tracks it.
+
+### Added
+
+- **`v018_regression_test.go`.** New regression test pinning the `MCPCFG_003` sensitivity contract end-to-end: feeds an MCP config containing a hardcoded `GITHUB_TOKEN` through `aguara.ScanContent`, asserts the resulting finding has `Sensitive=true`, and asserts `formatScanResult` redacts the literal secret to `[REDACTED]`. Mirrors the v0.17 regression file; locks the dep-bump intent.
+
+### Out of scope (still deferred to v0.7.0)
+
+- **`check_project` and `audit_project` MCP tools.** Repository-wide dependency checks (npm, PyPI, pnpm, Go, crates.io, Composer, RubyGems, Maven, NuGet, plus the manually-curated threat intel for the May 2026 AntV / Mini Shai-Hulud npm compromises) still require the Aguara CLI:
+
+  ```bash
+  aguara check .
+  aguara audit . --ci
+  ```
+
+  These will land as MCP tools once Aguara core exposes a stable public `Check` API.
+
 ## [0.6.0] - 2026-05-17
 
 The v0.6.0 release aligns mcp-aguara with the Aguara v0.17.0 backend. It is a maintenance + hardening release: no new MCP tools, no change to the existing tools' input schemas, no breaking change to the binary name. What changes is the surface mcp-aguara accurately advertises, the redaction guarantee on tool output, and the trust artifacts on the release pipeline.

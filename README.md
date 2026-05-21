@@ -16,9 +16,9 @@ Use it to help agents answer questions like:
 - Does this skill try to read secrets or exfiltrate data?
 - Which rule triggered, and why?
 
-Aguara MCP v0.6.0 is aligned with [Aguara](https://github.com/garagon/aguara) v0.17.0. It includes the current 219-detection catalog, analyzer-emitted rules, sensitivity-based output redaction, Unicode normalization, and context-aware false-positive reduction. Built on the [official MCP SDK](https://github.com/modelcontextprotocol/go-sdk) (v1, Tier 1).
+Aguara MCP v0.6.1 is aligned with [Aguara](https://github.com/garagon/aguara) v0.18.2. It includes the current 219-detection catalog, analyzer-emitted rules, sensitivity-based output redaction, Unicode normalization, and context-aware false-positive reduction. Built on the [official MCP SDK](https://github.com/modelcontextprotocol/go-sdk) (v1, Tier 1).
 
-Repository-wide dependency checks are still handled by the Aguara CLI:
+Repository-wide dependency checks (npm, PyPI, pnpm, Go, crates.io, Composer, RubyGems, Maven, NuGet) are still handled by the Aguara CLI:
 
 ```bash
 aguara check .
@@ -170,7 +170,7 @@ Without Aguara MCP, the agent would have installed it silently.
 
 ## Coverage
 
-The v0.17 Aguara catalog totals **219 detections** (193 YAML pattern rules + 26 analyzer-emitted) across seven analyzers:
+The Aguara v0.18.2 catalog totals **219 detections** (193 YAML pattern rules + 26 analyzer-emitted) across seven analyzers:
 
 - **Pattern matcher** - regex / contains rules covering prompt injection, credential leaks, exfiltration, command execution, supply-chain patterns, MCP attacks, indirect injection, external download, SSRF/cloud, third-party content, and Unicode attacks. Content is NFKC-normalized before scanning to prevent Unicode evasion.
 - **CI trust** - YAML-aware analysis of `.github/workflows/*.yml` for pwn-request chains, cache poisoning, OIDC token surface, and persisted-credentials checkout patterns. Reachable from MCP when the `filename` argument contains `.github/workflows/`.
@@ -221,9 +221,9 @@ Aguara MCP is itself security-hardened:
 - **No subprocess execution** - Aguara runs as an in-process Go library, eliminating PATH hijacking and binary substitution risks
 - **No network calls** - every MCP scan is fully offline. The Aguara rule catalog and analyzers are linked in at build time; the OSV-derived threat-intel snapshot is **not** bundled in the MCP binary because the MCP does not expose repository-wide dependency checks (use the Aguara CLI for those)
 - **Input validation** - Rule IDs validated against strict format, content size capped at 10 MB
-- **Filename sanitization** - Allowlisted characters only, length-capped, no path traversal; the canonical `.github/workflows/<basename>` prefix is preserved so the v0.17 ci-trust analyzer can reach workflow YAML
-- **Sensitivity-based output redaction** - Findings marked `Sensitive=true` by Aguara core (cred+exfil combos, toxic-flow cred reads, MCP_007) or belonging to the `credential-leak` category have their `matched_text` replaced with `[REDACTED]` before the MCP serializes the response; the MCP keeps its own defensive guard in addition to Aguara's in-place scrub
-- **Signed release pipeline** - release binaries are Cosign-signed with SPDX SBOMs attached, the multi-arch Docker image at `ghcr.io/garagon/mcp-aguara` is signed at digest with SLSA provenance and SBOM attestations; verify with `VERSION=v0.6.0 .github/scripts/verify-release.sh`
+- **Filename sanitization** - Allowlisted characters only, length-capped, no path traversal; the canonical `.github/workflows/<basename>` prefix is preserved so the ci-trust analyzer can reach workflow YAML
+- **Sensitivity-based output redaction** - Findings marked `Sensitive=true` by Aguara core (cred+exfil combos, toxic-flow cred reads, MCP_007, MCPCFG_003) or belonging to the `credential-leak` category have their `matched_text` replaced with `[REDACTED]` before the MCP serializes the response; the MCP keeps its own defensive guard in addition to Aguara's in-place scrub
+- **Signed release pipeline** - release binaries are Cosign-signed with SPDX SBOMs attached, the multi-arch Docker image at `ghcr.io/garagon/mcp-aguara` is signed at digest with SLSA provenance and SBOM attestations; verify with `VERSION=v0.6.1 .github/scripts/verify-release.sh`
 - **Version integrity** - Aguara scanner version is pinned in `go.sum`, verified at build time
 
 ## Advanced
