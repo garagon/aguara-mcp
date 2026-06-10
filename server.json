@@ -3,7 +3,7 @@
   "name": "io.github.garagon/mcp-aguara",
   "title": "Aguara MCP",
   "description": "Security scanner for AI agent skills and MCP servers",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "repository": {
     "url": "https://github.com/garagon/mcp-aguara",
     "source": "github"

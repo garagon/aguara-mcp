@@ -15,10 +15,12 @@ import (
 // callability. Failures here mean the core bump changed an invariant the
 // MCP relies on.
 
-func TestV017_ListRules_Returns219(t *testing.T) {
+func TestV017_ListRules_ReturnsFullCatalog(t *testing.T) {
+	// The expected count tracks the aligned core version; update it on
+	// every core bump (v0.24.0: 193 YAML + 51 analyzer-emitted).
 	rules := aguara.ListRules()
-	if got, want := len(rules), 219; got != want {
-		t.Errorf("aguara.ListRules() = %d rules, want %d (193 YAML + 26 analyzer-emitted)", got, want)
+	if got, want := len(rules), 244; got != want {
+		t.Errorf("aguara.ListRules() = %d rules, want %d (193 YAML + 51 analyzer-emitted)", got, want)
 	}
 }
 

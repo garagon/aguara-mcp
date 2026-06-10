@@ -46,13 +46,17 @@ func scanContentTool() *mcp.Tool {
 		Name: "scan_content",
 		Description: "Scan text for security threats before acting on it. Works on agent skills, " +
 			"READMEs, tool definitions, MCP server descriptions, prompts, package manifest content " +
-			"(package.json), and GitHub Actions workflow YAML when filename contains " +
-			"`.github/workflows/`. Detects prompt injection (pattern + NLP), credential leaks, " +
-			"data exfiltration, command execution, supply-chain patterns, MCP attacks, package " +
-			"metadata risks, JavaScript install-time payload shapes, GitHub Actions trust chains, " +
-			"and Unicode / encoding evasion. Findings are categorized by severity with remediation " +
-			"hints. Sensitive matches are redacted before output. Supports context-aware " +
-			"false-positive reduction via tool_name.",
+			"(package.json), GitHub Actions workflow YAML when filename contains " +
+			"`.github/workflows/`, Claude Code settings when filename is `.claude/settings.json` " +
+			"or `.claude/settings.local.json`, agent instruction files (`.cursorrules`, " +
+			"`.windsurfrules`, `.clinerules`, `AGENTS.md`, `copilot-instructions.md`), and pnpm " +
+			"policy when filename is `pnpm-workspace.yaml`. Detects prompt injection (pattern + " +
+			"NLP), credential leaks, data exfiltration, command execution, supply-chain patterns, " +
+			"MCP attacks, package metadata risks, JavaScript / Python / Rust install-time payload " +
+			"shapes, GitHub Actions trust chains, risky agent host configuration, weakened pnpm " +
+			"supply-chain settings, and Unicode / encoding evasion. Findings are categorized by " +
+			"severity with remediation hints. Sensitive matches are redacted before output. " +
+			"Supports context-aware false-positive reduction via tool_name.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -103,11 +107,12 @@ func checkMCPConfigTool() *mcp.Tool {
 func listRulesTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name: "list_rules",
-		Description: "List the security rules cataloged by Aguara. Returns 219 detections (193 " +
-			"YAML pattern rules + 26 analyzer-emitted rules from jsrisk, toxicflow, pkgmeta, " +
-			"ci-trust, NLP, and rug-pull analyzers) spanning multiple threat categories. " +
-			"Optionally filter by category (e.g. `prompt-injection`, `exfiltration`, " +
-			"`credential-leak`, `supply-chain`, `mcp-attack`, `toxic-flow`).",
+		Description: "List the security rules cataloged by Aguara. Returns 244 detections (193 " +
+			"YAML pattern rules + 51 analyzer-emitted rules from ci-trust, pkgmeta, jsrisk, " +
+			"pyrisk, rsbuild, pnpm-policy, agent-policy, NLP, toxic-flow, and rug-pull " +
+			"analyzers) spanning multiple threat categories. Optionally filter by category " +
+			"(e.g. `prompt-injection`, `exfiltration`, `credential-leak`, `supply-chain`, " +
+			"`mcp-attack`, `toxic-flow`, `agent-trust`).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -127,9 +132,10 @@ func explainRuleTool() *mcp.Tool {
 		Name: "explain_rule",
 		Description: "Get detailed information about a specific security rule by ID. Resolves " +
 			"both YAML rules (returns patterns plus true/false-positive examples) and " +
-			"analyzer-emitted rules from jsrisk, toxicflow, pkgmeta, ci-trust, NLP, and " +
-			"rug-pull (returns severity, category, analyzer name, description, and remediation; " +
-			"analyzer rules have no inline patterns or examples).",
+			"analyzer-emitted rules from ci-trust, pkgmeta, jsrisk, pyrisk, rsbuild, " +
+			"pnpm-policy, agent-policy, NLP, toxic-flow, and rug-pull (returns severity, " +
+			"category, analyzer name, description, and remediation; analyzer rules have no " +
+			"inline patterns or examples).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -532,15 +538,46 @@ var safeFilenameChars = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
 // filename were stripped to bare basename.
 const ghaWorkflowPrefix = ".github/workflows/"
 
+// claudeSettingsPrefix is preserved by sanitizeFilename so the v0.24
+// agent-policy analyzer can fire on Claude Code settings passed through
+// scan_content. The analyzer matches the exact path suffixes
+// `.claude/settings.json` and `.claude/settings.local.json`; a bare
+// `settings.json` basename would silently miss every AGENTCFG_* rule.
+const claudeSettingsPrefix = ".claude/"
+
+// claudeSettingsBasenames are the only files the agent-policy analyzer
+// reads under `.claude/`. The prefix exception is restricted to these
+// exact names so arbitrary `.claude/<file>` paths still get the default
+// basename strip.
+var claudeSettingsBasenames = map[string]bool{
+	"settings.json":       true,
+	"settings.local.json": true,
+}
+
+// instructionDotfiles are extensionless agent instruction files that
+// aguara v0.24 routes through the prompt-injection analyzer by exact
+// basename, leading dot included. Stripping the dot (the default
+// sanitizeBasename behavior) would silently downgrade them to generic
+// text and lose both the analyzer routing and the high-trust weighting.
+var instructionDotfiles = map[string]bool{
+	".cursorrules":   true,
+	".windsurfrules": true,
+	".clinerules":    true,
+}
+
 // sanitizeFilename strips path components, restricts to safe characters, and caps length.
-// Exception: when `.github/workflows/` appears anywhere in the path, the
-// canonical prefix plus a sanitized basename is preserved so the ci-trust
-// analyzer registered by aguara v0.17 can match. Windows separators are
-// normalized first so paths like `C:\repo\.github\workflows\ci.yml` and
-// relative paths like `repo/.github/workflows/ci.yml` reach the analyzer
-// with the segment intact. Anything after the segment that contains a
-// further path separator (traversal or nested subdirs) falls back to the
-// default basename strip.
+// Exceptions, each scoped to what an aguara analyzer keys on:
+//   - `.github/workflows/` anywhere in the path: the canonical prefix plus a
+//     sanitized basename is preserved so the ci-trust analyzer can match.
+//   - a path ending in `.claude/settings.json` or
+//     `.claude/settings.local.json` at a segment boundary: the canonical
+//     suffix is preserved so the agent-policy analyzer can match.
+//
+// Windows separators are normalized first so paths like
+// `C:\repo\.github\workflows\ci.yml` and relative paths like
+// `repo/.claude/settings.json` reach the analyzer with the segment intact.
+// Anything after a preserved segment that contains a further path separator
+// (traversal or nested subdirs) falls back to the default basename strip.
 func sanitizeFilename(name string) string {
 	normalized := strings.ReplaceAll(name, `\`, `/`)
 	if idx := strings.Index(normalized, ghaWorkflowPrefix); idx >= 0 {
@@ -552,16 +589,31 @@ func sanitizeFilename(name string) string {
 			}
 		}
 	}
+	// The agent-policy analyzer matches by path suffix, so mirror that:
+	// the path must END with `.claude/<settings file>` at a segment
+	// boundary. This accepts `/tmp/repo/.claude/settings.json` while
+	// rejecting `not.claude/settings.json` and traversal shapes like
+	// `.claude/../settings.json`.
+	for base := range claudeSettingsBasenames {
+		suffix := claudeSettingsPrefix + base
+		if normalized == suffix || strings.HasSuffix(normalized, "/"+suffix) {
+			return suffix
+		}
+	}
 	return sanitizeBasename(name)
 }
 
 // sanitizeBasename is the shared core of sanitizeFilename: strip directory
 // components, drop leading dots, restrict to the allowlist, fall back to
-// skill.md when nothing safe remains, and cap length.
+// skill.md when nothing safe remains, and cap length. Known agent
+// instruction dotfiles keep their leading dot (see instructionDotfiles).
 func sanitizeBasename(name string) string {
 	i := strings.LastIndexAny(name, `/\`)
 	if i >= 0 {
 		name = name[i+1:]
+	}
+	if instructionDotfiles[strings.ToLower(name)] {
+		return strings.ToLower(name)
 	}
 	name = strings.TrimLeft(name, ".")
 	name = safeFilenameChars.ReplaceAllString(name, "")

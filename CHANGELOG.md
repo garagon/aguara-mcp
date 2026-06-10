@@ -4,6 +4,58 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-10
+
+Aligns mcp-aguara with the Aguara v0.24.0 backend and unlocks the new
+detection surfaces through `scan_content`. The agent layer Aguara added
+between v0.19 and v0.24 is exactly the territory this MCP serves -- an
+agent deciding whether to trust a cloned repo's configuration -- so this
+release also fixes two filename-sanitization gaps that would have
+silently kept those analyzers out of reach.
+
+### Added
+
+- **Claude Code settings posture via `scan_content`.** Passing
+  `filename: ".claude/settings.json"` (or `settings.local.json`) now
+  reaches the agent-policy analyzer and its eight `AGENTCFG_*` rules
+  (category `agent-trust`): fetch-and-execute hooks, code-injection env
+  vars, `bypassPermissions`, MCP auto-approval, broad or secret-read
+  allow rules, repo-shipped credential helpers, weak default modes.
+  `sanitizeFilename` previously stripped the path to a bare
+  `settings.json`, which the analyzer ignores; the `.claude/` suffix is
+  now preserved for exactly these two filenames, the same scoped
+  exception the `.github/workflows/` prefix already has.
+- **Agent instruction files as high-trust prompt surfaces.**
+  `.cursorrules`, `.windsurfrules`, and `.clinerules` now keep their
+  leading dot through sanitization, so they reach the prompt-injection
+  analyzer and get the high-trust confidence weighting Aguara v0.24
+  gives instruction files. Previously the sanitizer dropped the leading
+  dot and the content was scanned as generic text. `AGENTS.md` and
+  `copilot-instructions.md` already passed through intact.
+- **pnpm supply-chain posture via `scan_content`.** Passing
+  `filename: "pnpm-workspace.yaml"` reaches the pnpm-policy analyzer
+  and its nine `PNPM_*` rules for settings weakened below the pnpm v11
+  defaults (no sanitizer change needed; the basename was already
+  preserved).
+- **v0.24 regression suite** (`v024_regression_test.go`) pinning the
+  new contract end to end through `sanitizeFilename`: agent-policy on
+  `.claude/` paths, pnpm-policy on `pnpm-workspace.yaml`,
+  instruction-dotfile routing, `agent-trust` category size, and
+  analyzer-rule metadata via `explain_rule`.
+
+### Aligned
+
+- **Aguara core v0.18.2 -> v0.24.0.** No public API surface changes; no
+  MCP input-schema changes. The catalog grows from 219 to 244 detections
+  (193 YAML + 51 analyzer-emitted) across eleven analyzers: the bump
+  inherits pyrisk and rsbuild (v0.22), the six Miasma-informed
+  behavioral detections (v0.23), and pnpm-policy, agent-policy, and
+  instruction-file weighting (v0.24).
+- **Tool descriptions and README** updated to the v0.24.0 surface:
+  catalog counts, analyzer lists, the new `agent-trust` category, and
+  the filename hints that route content to the new analyzers.
+- **`server.json`** reports `version: 0.7.0`.
+
 ## [0.6.1] - 2026-05-20
 
 The v0.6.1 release aligns mcp-aguara with the Aguara v0.18.2 backend. It is a maintenance release: no new MCP tools, no change to existing tools' input schemas, no change to the binary name. The dependency bump pulls in core's redaction improvement for `MCPCFG_003` (hardcoded secrets in MCP server env blocks); the new rules added in Aguara v0.18.x are CLI-only (pnpm lockfile coverage, manual threat-intel snapshots for the May 2026 npm compromises) and do not change the MCP's tool surface.

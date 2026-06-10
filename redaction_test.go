@@ -34,7 +34,7 @@ func TestMCPFormatScanResult_RedactsSensitiveMatchedText(t *testing.T) {
 			Score:       50,
 		}},
 		FilesScanned: 1,
-		RulesLoaded:  219,
+		RulesLoaded:  244,
 		Verdict:      aguara.VerdictBlock,
 	}
 
@@ -86,7 +86,7 @@ func TestMCPFormatScanResult_RedactsLegacyCredentialLeakCategory(t *testing.T) {
 			Sensitive:   false, // legacy category-only contract
 		}},
 		FilesScanned: 1,
-		RulesLoaded:  219,
+		RulesLoaded:  244,
 		Verdict:      aguara.VerdictBlock,
 	}
 
@@ -123,7 +123,7 @@ func TestMCPFormatScanResult_RedactsSensitiveContext(t *testing.T) {
 			},
 		}},
 		FilesScanned: 1,
-		RulesLoaded:  219,
+		RulesLoaded:  244,
 	}
 
 	out := formatScanResult(result)
@@ -163,7 +163,7 @@ func TestMCPFormatScanResult_PreservesNonSensitiveMatchedText(t *testing.T) {
 			},
 		},
 		FilesScanned: 1,
-		RulesLoaded:  219,
+		RulesLoaded:  244,
 	}
 
 	out := formatScanResult(result)
