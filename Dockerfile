@@ -25,6 +25,11 @@ RUN CGO_ENABLED=0 go build -trimpath \
 FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
 COPY --from=builder /aguara-mcp /usr/local/bin/aguara-mcp
 
+# Ownership marker for the Official MCP Registry: the registry verifies
+# that this label matches the server name in server.json before
+# accepting an OCI package for io.github.garagon/mcp-aguara.
+LABEL io.modelcontextprotocol.server.name="io.github.garagon/mcp-aguara"
+
 # Run as non-root. uid 10001 matches the convention across the Aguara
 # stack so host-volume permissions can target a single uid.
 RUN adduser -D -u 10001 aguara
