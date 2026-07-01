@@ -3,7 +3,7 @@ module github.com/garagon/mcp-aguara
 go 1.25.5
 
 require (
-	github.com/garagon/aguara v0.24.0
+	github.com/garagon/aguara v0.27.0
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 )
 
@@ -15,7 +15,7 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
