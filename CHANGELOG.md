@@ -4,6 +4,37 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+Aligns mcp-aguara with the Aguara v0.27.0 backend (v0.25-v0.27) and
+unlocks the npm install-trust surface through `scan_content`. The
+npm-policy analyzer keys on the exact `.npmrc` basename, which the
+filename sanitizer used to strip to `npmrc` - the same silent-drop
+class fixed for `.cursorrules` in v0.7.0 - so the sanitizer now
+preserves it.
+
+### Added
+
+- **npm install-trust posture via `scan_content`.** Passing
+  `filename: ".npmrc"` now reaches the npm-policy analyzer (Aguara
+  v0.25) and its four `NPM_*` rules: the `dangerously-allow-all-scripts`
+  escape hatch (HIGH), unpinned `allow-scripts-pin` approvals, and
+  `allow-git` / `allow-remote` relaxations. `package.json` content also
+  reaches the analyzer's `allowScripts` policy checks alongside the
+  existing pkgmeta rules. `.npmrc` joins the preserved-dotfile set in
+  `sanitizeFilename` with regression tests pinning both the sanitizer
+  exception and the end-to-end detection.
+
+### Changed
+
+- **Aguara core v0.24.0 -> v0.27.0.** Catalog grows to 250 detections
+  (193 YAML + 57 analyzer-emitted) across twelve analyzers; `list_rules`
+  and `explain_rule` resolve the new `NPM_*` rules and the npm v12
+  readiness INFO rules. No public API changes in core between v0.24.0
+  and v0.27.0; scan behavior is otherwise unchanged. Terminal UX and
+  fuzz-harness work in v0.27.0 is CLI/dev-side only and does not affect
+  the library path the MCP uses.
+- Tool descriptions and README updated to the 250-detection catalog and
+  the twelve-analyzer coverage table.
+
 ## [0.7.0] - 2026-06-10
 
 Aligns mcp-aguara with the Aguara v0.24.0 backend and unlocks the new

@@ -49,12 +49,13 @@ func scanContentTool() *mcp.Tool {
 			"(package.json), GitHub Actions workflow YAML when filename contains " +
 			"`.github/workflows/`, Claude Code settings when filename is `.claude/settings.json` " +
 			"or `.claude/settings.local.json`, agent instruction files (`.cursorrules`, " +
-			"`.windsurfrules`, `.clinerules`, `AGENTS.md`, `copilot-instructions.md`), and pnpm " +
+			"`.windsurfrules`, `.clinerules`, `AGENTS.md`, `copilot-instructions.md`), npm " +
+			"install-trust policy when filename is `.npmrc` or `package.json`, and pnpm " +
 			"policy when filename is `pnpm-workspace.yaml`. Detects prompt injection (pattern + " +
 			"NLP), credential leaks, data exfiltration, command execution, supply-chain patterns, " +
 			"MCP attacks, package metadata risks, JavaScript / Python / Rust install-time payload " +
-			"shapes, GitHub Actions trust chains, risky agent host configuration, weakened pnpm " +
-			"supply-chain settings, and Unicode / encoding evasion. Findings are categorized by " +
+			"shapes, GitHub Actions trust chains, risky agent host configuration, weakened npm / " +
+			"pnpm supply-chain settings, and Unicode / encoding evasion. Findings are categorized by " +
 			"severity with remediation hints. Sensitive matches are redacted before output. " +
 			"Supports context-aware false-positive reduction via tool_name.",
 		InputSchema: map[string]any{
@@ -107,10 +108,10 @@ func checkMCPConfigTool() *mcp.Tool {
 func listRulesTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name: "list_rules",
-		Description: "List the security rules cataloged by Aguara. Returns 244 detections (193 " +
-			"YAML pattern rules + 51 analyzer-emitted rules from ci-trust, pkgmeta, jsrisk, " +
-			"pyrisk, rsbuild, pnpm-policy, agent-policy, NLP, toxic-flow, and rug-pull " +
-			"analyzers) spanning multiple threat categories. Optionally filter by category " +
+		Description: "List the security rules cataloged by Aguara. Returns 250 detections (193 " +
+			"YAML pattern rules + 57 analyzer-emitted rules from ci-trust, pkgmeta, jsrisk, " +
+			"pyrisk, rsbuild, npm-policy, pnpm-policy, agent-policy, NLP, toxic-flow, and " +
+			"rug-pull analyzers) spanning multiple threat categories. Optionally filter by category " +
 			"(e.g. `prompt-injection`, `exfiltration`, `credential-leak`, `supply-chain`, " +
 			"`mcp-attack`, `toxic-flow`, `agent-trust`).",
 		InputSchema: map[string]any{
@@ -133,7 +134,7 @@ func explainRuleTool() *mcp.Tool {
 		Description: "Get detailed information about a specific security rule by ID. Resolves " +
 			"both YAML rules (returns patterns plus true/false-positive examples) and " +
 			"analyzer-emitted rules from ci-trust, pkgmeta, jsrisk, pyrisk, rsbuild, " +
-			"pnpm-policy, agent-policy, NLP, toxic-flow, and rug-pull (returns severity, " +
+			"npm-policy, pnpm-policy, agent-policy, NLP, toxic-flow, and rug-pull (returns severity, " +
 			"category, analyzer name, description, and remediation; analyzer rules have no " +
 			"inline patterns or examples).",
 		InputSchema: map[string]any{
@@ -554,15 +555,21 @@ var claudeSettingsBasenames = map[string]bool{
 	"settings.local.json": true,
 }
 
-// instructionDotfiles are extensionless agent instruction files that
-// aguara v0.24 routes through the prompt-injection analyzer by exact
-// basename, leading dot included. Stripping the dot (the default
-// sanitizeBasename behavior) would silently downgrade them to generic
-// text and lose both the analyzer routing and the high-trust weighting.
-var instructionDotfiles = map[string]bool{
+// preservedDotfiles are extensionless dotfiles that an aguara analyzer
+// matches by exact basename, leading dot included. Stripping the dot
+// (the default sanitizeBasename behavior) would silently drop the file
+// out of the analyzer's reach:
+//   - `.cursorrules` / `.windsurfrules` / `.clinerules`: agent
+//     instruction files aguara v0.24 routes through the prompt-injection
+//     analyzer with high-trust weighting.
+//   - `.npmrc`: project npm config the npm-policy analyzer (aguara
+//     v0.25) reads for install-trust weakenings such as
+//     `dangerously-allow-all-scripts`.
+var preservedDotfiles = map[string]bool{
 	".cursorrules":   true,
 	".windsurfrules": true,
 	".clinerules":    true,
+	".npmrc":         true,
 }
 
 // sanitizeFilename strips path components, restricts to safe characters, and caps length.
@@ -605,14 +612,14 @@ func sanitizeFilename(name string) string {
 
 // sanitizeBasename is the shared core of sanitizeFilename: strip directory
 // components, drop leading dots, restrict to the allowlist, fall back to
-// skill.md when nothing safe remains, and cap length. Known agent
-// instruction dotfiles keep their leading dot (see instructionDotfiles).
+// skill.md when nothing safe remains, and cap length. Known
+// analyzer-matched dotfiles keep their leading dot (see preservedDotfiles).
 func sanitizeBasename(name string) string {
 	i := strings.LastIndexAny(name, `/\`)
 	if i >= 0 {
 		name = name[i+1:]
 	}
-	if instructionDotfiles[strings.ToLower(name)] {
+	if preservedDotfiles[strings.ToLower(name)] {
 		return strings.ToLower(name)
 	}
 	name = strings.TrimLeft(name, ".")
