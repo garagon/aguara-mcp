@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-01
+
 Aligns mcp-aguara with the Aguara v0.27.0 backend (v0.25-v0.27) and
 unlocks the npm install-trust surface through `scan_content`. The
 npm-policy analyzer keys on the exact `.npmrc` basename, which the
@@ -22,6 +24,12 @@ preserves it.
   existing pkgmeta rules. `.npmrc` joins the preserved-dotfile set in
   `sanitizeFilename` with regression tests pinning both the sanitizer
   exception and the end-to-end detection.
+- **Official MCP Registry readiness.** The Docker image now carries the
+  `io.modelcontextprotocol.server.name` ownership label and
+  `server.json` declares the `ghcr.io/garagon/mcp-aguara:0.8.0` OCI
+  package, so this release can be published to
+  registry.modelcontextprotocol.io. The `server.json` version and OCI
+  tag must be bumped together on every release.
 
 ### Changed
 
